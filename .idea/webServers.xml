@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="4b5c8992-7b2b-47e3-b407-717179307ca8" name="wuliuqi_linux (project level)">
+        <fileTransfer rootFolder="/home/wuliuqi/Desktop/lion_satellite" accessType="SFTP" host="10.128.237.106" port="22" sshConfigId="a6b18aa0-a4b0-49be-b397-37d7b054a226" sshConfig="wuliuqi_linux">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
