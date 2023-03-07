@@ -22,3 +22,11 @@
 选择跳数最少的接入卫星
 
 链路只有通断两种属性，执行路径计算
+
+
+
+reference：
+Analysis of Inter-Satellite Link Paths for LEO Mega-Constellation Networks
+Distributed On-Demand Routing for LEO Mega-Constellations: A Starlink Case Study
+
+Dynamic Routing for Software-Defined LEO Satellite Networks based on ISL Attributes
