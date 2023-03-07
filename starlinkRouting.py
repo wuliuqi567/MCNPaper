@@ -209,7 +209,6 @@ def calculate_two_gs_routing(ground_station_satellites_in_range, src_gs_index, d
                 hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
                 hop_sum = hop_horizontal + hop_vertical
 
-
                 if hop_sum < min_hop_sum:
                     min_hop_sum = hop_sum
                     select_src_sat_id = src_sat_id
@@ -232,7 +231,22 @@ def calculate_two_gs_routing(ground_station_satellites_in_range, src_gs_index, d
 
 
 def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
-    grid = 0
+
+    route_from_s = [select_src_sat_id]
+    route_from_d = [select_des_sat_id]
+
+    n_src = select_src_sat_id // 22
+    n_des = select_des_sat_id // 22
+
+    m_src = select_src_sat_id % 22
+    m_des = select_des_sat_id % 22
+
+    for i in range(dir_hop_horizontal):
+        reward_s = lat
+
+
+
+
 
 
 
