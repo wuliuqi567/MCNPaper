@@ -176,11 +176,11 @@ class Mytopo():
 def OGDRouting(ground_station_satellites_in_range):
     # divide satellites into two types
     gs_size = len(ground_station_satellites_in_range)
-
+    route = []
     for gs1_index in range(0, gs_size):
         gs2_index = gs_size
         while gs2_index > gs1_index:
-            calculate_two_gs_routing(gs1_index, gs2_index)
+            route.append(calculate_two_gs_routing(gs1_index, gs2_index))
             gs2_index -= 1
 
 
@@ -213,21 +213,8 @@ def calculate_two_gs_routing(ground_station_satellites_in_range, src_gs_index, d
                     min_hop_sum = hop_sum
                     select_src_sat_id = src_sat_id
                     select_des_sat_id = des_sat_id
-                    if abs(n_src - n_des) <= 72 / 2:
-                        dir_hop_horizontal = 1  # right 顺时针减 逆时针加
-                    elif abs(n_src - n_des) > 72 / 2:
-                        dir_hop_horizontal = -1  # left
-                    else:
-                        dir_hop_horizontal = 0  # no movement
 
-                    if abs(n_src - n_des) <= 22 / 2:
-                        dir_hop_vertical = 1  # up 顺时针加 逆时针减
-                    elif abs(n_src - n_des) > 22 / 2:
-                        dir_hop_vertical = -1  # down
-                    else:
-                        dir_hop_vertical = 0  # no movement
-
-    orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+    return orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
 
 
 def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
@@ -241,8 +228,59 @@ def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal,
     m_src = select_src_sat_id % 22
     m_des = select_des_sat_id % 22
 
-    for i in range(dir_hop_horizontal):
-        reward_s = lat
+    hop_h = abs(n_src - n_des)
+
+    if 0 < hop_h <= 72 / 2:
+        dir_hop_horizontal = 1  # right 顺时针减 逆时针加
+    elif hop_h > 72 / 2:
+        dir_hop_horizontal = -1  # left
+    else:
+        dir_hop_horizontal = 0  # no movement
+
+    hop_v = abs(m_src - m_des)
+    if 0 < hop_v <= 22 / 2:
+        dir_hop_vertical = 1  # up 顺时针加 逆时针减
+    elif hop_v > 22 / 2:
+        dir_hop_vertical = -1  # down
+    else:
+        dir_hop_vertical = 0  # no movement
+
+    for i in range(hop_h):
+
+        next_node_n_src = n_src + dir_hop_horizontal
+        next_node_n_des = n_des - dir_hop_horizontal
+
+        if n_src + dir_hop_horizontal or n_des - dir_hop_horizontal < 0:
+            next_node_n_src = 71
+            next_node_n_des = 71
+
+        next_node_n_src %= 72
+        next_node_n_des %= 72
+        next_node_src = next_node_n_src * 22 + m_src
+        next_node_des = next_node_n_des * 22 + m_des
+
+        reward_s = lat(n_src * 22 + m_src) + lat(next_node_src)
+        reward_d = lat(n_des * 22, m_des) + lat(next_node_des)
+
+        if reward_s >= reward_d:
+            route_from_s.append(next_node_src)
+            n_src = next_node_n_src
+        else:
+            route_from_d.append(next_node_des)
+            n_des = next_node_n_des
+
+    assert n_src == n_des
+    route_from_d.reverse()
+
+    for i in range(hop_v):
+        if m_src + dir_hop_vertical < 0:
+            next_node_m_src = 21
+        else:
+            next_node_m_src = m_src + dir_hop_vertical
+        route_from_s.append(n_src * 22 + next_node_m_src)
+        m_src = next_node_m_src
+
+    return route_from_s + route_from_d
 
 
 
