@@ -276,7 +276,7 @@ def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal,
         if m_src + dir_hop_vertical < 0:
             next_node_m_src = 21
         else:
-            next_node_m_src = m_src + dir_hop_vertical
+            next_node_m_src = (m_src + dir_hop_vertical) % 22
         route_from_s.append(n_src * 22 + next_node_m_src)
         m_src = next_node_m_src
 
