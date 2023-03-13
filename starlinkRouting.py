@@ -148,22 +148,31 @@ class Mytopo():
             print(" \n> ground_station_satellites_in_range ")
             print(ground_station_satellites_in_range)
 
+        if self.enable_verbose_logs:
+            route = OGDRouting(satellites, ground_station_satellites_in_range)
+            print('\nroute', route)
+
         # Calculate shortest path distances
         if self.enable_verbose_logs:
             print("  > Calculating Floyd-Warshall for graph without ground-station relays")
-            # start_time = time.time()
 
-            cal_time = []
-            for i in range(0, 10):
-                start_time = time.perf_counter()
-                # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
-                dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
-                end_time = time.perf_counter()
-                time_sum = end_time - start_time
+            minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
+            # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
+            print(minWPath_vs_vt)
 
-                cal_time.append(time_sum)
-                # print('calculate time 2:', time_sum_2)
-            print(cal_time)
+            # cal_time = []
+            # for i in range(0, 10):
+            #     start_time = time.perf_counter()
+            #     # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
+            #     dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
+            #     end_time = time.perf_counter()
+            #     time_sum = end_time - start_time
+            #
+            #     cal_time.append(time_sum)
+            #
+            # print(cal_time)
+
+
             # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
             # satellites,
             # ground_stations,
@@ -173,18 +182,23 @@ class Mytopo():
             # print(ground_fstate_dict)
 
 # [[(614842.25, 1521, 1), (683955.5, 1085, 0), (687683.5625, 1064, 0), (693692.875, 1543, 1),
-def OGDRouting(ground_station_satellites_in_range):
+def OGDRouting(satellites, ground_station_satellites_in_range):
     # divide satellites into two types
     gs_size = len(ground_station_satellites_in_range)
     route = []
     for gs1_index in range(0, gs_size):
-        gs2_index = gs_size
+        gs2_index = gs_size-1
         while gs2_index > gs1_index:
-            route.append(calculate_two_gs_routing(gs1_index, gs2_index))
+            temp = calculate_two_gs_routing(satellites, ground_station_satellites_in_range, gs1_index, gs2_index)
+            temp.insert(0, len(satellites) + gs1_index)
+            temp.append(len(satellites) + gs2_index)
+            route.append(temp)
+
             gs2_index -= 1
+    return route
 
 
-def calculate_two_gs_routing(ground_station_satellites_in_range, src_gs_index, des_gs_index):
+def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src_gs_index, des_gs_index):
     src_gs_sats_in_range = ground_station_satellites_in_range[src_gs_index]
     des_gs_sats_in_range = ground_station_satellites_in_range[des_gs_index]
     min_hop_sum = 65535
@@ -214,10 +228,10 @@ def calculate_two_gs_routing(ground_station_satellites_in_range, src_gs_index, d
                     select_src_sat_id = src_sat_id
                     select_des_sat_id = des_sat_id
 
-    return orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+    return orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
 
 
-def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
+def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
 
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
@@ -259,8 +273,8 @@ def orbit_gird_routing(select_src_sat_id, select_des_sat_id, dir_hop_horizontal,
         next_node_src = next_node_n_src * 22 + m_src
         next_node_des = next_node_n_des * 22 + m_des
 
-        reward_s = lat(n_src * 22 + m_src) + lat(next_node_src)
-        reward_d = lat(n_des * 22, m_des) + lat(next_node_des)
+        reward_s = abs(satellites[n_src * 22 + m_src].sublat) + abs(satellites[next_node_src].sublat)
+        reward_d = abs(satellites[n_des * 22, m_des].sublat) + abs(satellites[next_node_des].sublat)
 
         if reward_s >= reward_d:
             route_from_s.append(next_node_src)

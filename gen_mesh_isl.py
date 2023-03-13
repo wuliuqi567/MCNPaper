@@ -152,10 +152,10 @@ def gs_selected(gen_data:str):
     n_orbits = sats_info['n_orbits']
     n_sats_per_orbit = sats_info['n_sats_per_orbit']
     epoch = sats_info['epoch']
-    time = epoch + 800 * u.s
+    # time = epoch + 800 * u.s
     ground_stations = read_ground_stations_extended(gen_data)
 
-    gs_sat_in_range_file = './gen_data2/starlink_info/ground_station_satellites_in_range.txt'
+    gs_sat_in_range_file = './starlink/starlink_info/ground_station_satellites_in_range.txt'
     file_gs = open(gs_sat_in_range_file, 'w')
 
     ground_station_satellites_in_range = []
@@ -167,7 +167,7 @@ def gs_selected(gen_data:str):
                 ground_station,
                 satellites[sid],
                 str(epoch),
-                str(time)
+                str(epoch)
             )
             if distance_m <= MAX_GSL_LENGTH_M:
                 satellites_in_range.append((distance_m, sid))

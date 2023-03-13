@@ -5,10 +5,17 @@ import random
 import gen_mesh_isl
 
 
-gen_data = './gen_data2/'
-filename_ground_stations_basic_in = './gen_data2/starlink_info/ground_stations_basic.txt'
-filename_ground_stations_out = './gen_data2/starlink_info/ground_stations.txt'
-output_file = './gen_data2/starlink_info/mesh_net_path.txt'
+# gen_data = './gen_data2/'
+# filename_ground_stations_basic_in = './gen_data2/starlink_info/ground_stations_basic.txt'
+# filename_ground_stations_out = './gen_data2/starlink_info/ground_stations.txt'
+# output_file = './gen_data2/starlink_info/mesh_net_path.txt'
+
+gen_data = './starlink/'
+filename_ground_stations_basic_in = './starlink/starlink_info/ground_stations_basic.txt'
+filename_ground_stations_out = './starlink/starlink_info/ground_stations.txt'
+output_file = './starlink/starlink_info/mesh_net_path.txt'
+
+# starlink_isls_plus_grid_twostation_algorithm_free_one_only_over_isls
 
 """
 The bandwidth of the different links is the randomly chosen from 500 KBps to 2 MBps. 
@@ -45,7 +52,6 @@ def mutipath_programming():
     print(minWPath_vs_vt)
     # (gAnt.edges[edge]['weight'] for edge in nx.utils.pairwise(minWPath4)
 
-
     nx.draw(mesh_net, pos, with_labels=True, font_size=10)
     # nx.draw(mesh_net, pos, with_labels=True)
     nx.draw_networkx_nodes(mesh_net, pos, node_color='pink', nodelist=minWPath_vs_vt)
@@ -60,6 +66,13 @@ def mutipath_programming():
 
     plt.show()
 
+#     route[[1584, 1434, 1435, 1436, 1432, 1585]]
+#     > Calculating
+#     Floyd - Warshall
+#     for graph without ground-station relays
+#
+#
+#     [1584, 1477, 1455, 1433, 1432, 1585]
 
     return 1
 
