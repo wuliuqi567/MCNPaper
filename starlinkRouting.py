@@ -6,6 +6,7 @@ from astropy import units as u
 import networkx as nx
 import time
 from gen_satellites_info import gen_info
+from gen_mesh_isl import verifiy_routing
 
 EARTH_RADIUS = 6378135.0
 ECCENTRICITY = 0.0000001  # Circular orbits are zero, but pyephem does not permit 0, so lowest possible value
@@ -141,7 +142,6 @@ class Mytopo():
                     self.graphs_sat_net_graph_all_with_only_gsls.add_edge(sid, len(satellites) + ground_station["gid"],
                                                                           weight=delay)
             satellites_in_range = sorted(satellites_in_range)
-
             ground_station_satellites_in_range.append(satellites_in_range)
 
         if self.enable_verbose_logs:
@@ -159,10 +159,10 @@ class Mytopo():
                 OGDRouting_time.append(time_sum)
             print('\nOGDRouting_time', OGDRouting_time)
 
+        # verifiy_routing(isl_list, route[0][1], route[0][-2], sat_info)
         # Calculate shortest path distances
         if self.enable_verbose_logs:
             print("  > Calculating Floyd-Warshall for graph without ground-station relays")
-
             # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
             # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
             # print("\nminWPath_vs_vt", minWPath_vs_vt)
@@ -179,8 +179,8 @@ class Mytopo():
                 time_sum = end_time - start_time
 
                 cal_time.append(time_sum)
-
-            print("cal_time", cal_time)
+                print("cal_time", cal_time)
+        # verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info)
 
 
             # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
@@ -215,33 +215,53 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     select_des_sat_id = 0
     dir_hop_horizontal = 0
     dir_hop_vertical = 0
+    hop_horizontal_last = 0
+    sel_src_type = 2 # 0 descending 1 ascending  2 error
+    sel_des_type = 2
+
     for dis_sat_to_src, src_sat_id, src_type in src_gs_sats_in_range:
         for dis_sat_to_des, des_sat_id, des_type in des_gs_sats_in_range:
 
-            if src_type != des_type:
-                continue
-            else:
+            # if src_type != des_type:
+            #     continue
+            # else:
 
-                n_src = src_sat_id // 22
-                n_des = des_sat_id // 22
+            n_src = src_sat_id // 22
+            n_des = des_sat_id // 22
 
-                m_src = src_sat_id % 22
-                m_des = des_sat_id % 22
+            m_src = src_sat_id % 22
+            m_des = des_sat_id % 22
 
-                hop_horizontal = min(abs(n_src - n_des), 72-abs(n_src - n_des))
-                hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
+            hop_horizontal = min(abs(n_src - n_des), 72-abs(n_src - n_des))
+            hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
 
-                hop_sum = hop_horizontal + hop_vertical
+            hop_sum = hop_horizontal + hop_vertical
+            print('src  des  hop', src_sat_id, des_sat_id, hop_sum)
+            if hop_sum < min_hop_sum:
+                min_hop_sum = hop_sum
+                select_src_sat_id = src_sat_id
+                select_des_sat_id = des_sat_id
+                hop_horizontal_last = hop_horizontal
+                sel_src_type = src_type
+                sel_des_type = des_type
 
-                if hop_sum < min_hop_sum:
+            elif hop_sum == min_hop_sum:
+                if hop_horizontal > hop_horizontal_last:
                     min_hop_sum = hop_sum
                     select_src_sat_id = src_sat_id
                     select_des_sat_id = des_sat_id
+                    hop_horizontal_last = hop_horizontal
+                    sel_src_type = src_type
+                    sel_des_type = des_type
 
-    return orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+    print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
+    if sel_src_type == sel_des_type:
+        return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+    else:
+        return orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
 
 
-def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
+def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
 
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
@@ -307,16 +327,72 @@ def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop
 
     return route_from_s + route_from_d
 
+def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
 
+    route_from_s = [select_src_sat_id]
+    route_from_d = [select_des_sat_id]
 
+    n_src = select_src_sat_id // 22
+    n_des = select_des_sat_id // 22
 
+    m_src = select_src_sat_id % 22
+    m_des = select_des_sat_id % 22
 
+    hop_h = n_src - n_des
 
+    if -72 / 2 <= hop_h < 0 or hop_h > 72 / 2:
+        dir_hop_horizontal = 1  # right 顺时针减 逆时针加
+    elif hop_h < -72 / 2 or 0 < hop_h <= 72 / 2:
+        dir_hop_horizontal = -1  # left
+    else:
+        dir_hop_horizontal = 0  # no movement
 
+    hop_v = m_src - m_des
+    if -22 / 2 <= hop_v < 0 or hop_v > 22 / 2:
+        dir_hop_vertical = 1  # up 顺时针加 逆时针减
+    elif hop_v < -22 / 2 or 0 < hop_v <= 22 / 2:
+        dir_hop_vertical = -1  # down
+    else:
+        dir_hop_vertical = 0  # no movement
 
+    for i in range(hop_v):
 
+        next_node_m_src = m_src + dir_hop_vertical
+        next_node_m_des = m_des - dir_hop_vertical
 
+        if m_src + dir_hop_vertical < 0:
+            next_node_m_src = 21
+        if m_des - dir_hop_vertical < 0:
+            next_node_m_des = 21
 
+        next_node_m_src %= 22
+        next_node_m_des %= 22
+
+        next_node_src = n_src * 22 + next_node_m_src
+        next_node_des = n_des * 22 + next_node_m_des
+
+        reward_s = abs(satellites[n_src * 22 + m_src].sublat) + abs(satellites[next_node_src].sublat)
+        reward_d = abs(satellites[n_des * 22 + m_des].sublat) + abs(satellites[next_node_des].sublat)
+
+        if reward_s <= reward_d:
+            route_from_s.append(next_node_src)
+            m_src = next_node_m_src
+        else:
+            route_from_d.append(next_node_des)
+            m_des = next_node_m_des
+
+    assert m_src == m_des
+    route_from_d.reverse()
+
+    for i in range(hop_h - 1):
+        if n_src + dir_hop_horizontal < 0:
+            next_node_n_src = 71
+        else:
+            next_node_n_src = (n_src + dir_hop_horizontal) % 72
+        route_from_s.append(next_node_n_src * 22 + m_src)
+        n_src = next_node_n_src
+
+    return route_from_s + route_from_d
 
 def read_tles(gen_data):
     """

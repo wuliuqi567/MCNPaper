@@ -190,8 +190,8 @@ def gs_selected(gen_data:str):
     sat_two_final_selected.append((sat_two_final_selected[0][0] * n_sats_per_orbit + sat_two_final_selected[0][1]))
     sat_two_final_selected.append((sat_two_final_selected[1][0] * n_sats_per_orbit + sat_two_final_selected[1][1]))
 
-    sat_src = sat_two_final_selected[0][0] * 22 + sat_two_final_selected[0][1]
-    sat_des = sat_two_final_selected[1][0] * 22 + sat_two_final_selected[1][1]
+    sat_src = sat_two_final_selected[0][0] * n_sats_per_orbit + sat_two_final_selected[0][1]
+    sat_des = sat_two_final_selected[1][0] * n_sats_per_orbit + sat_two_final_selected[1][1]
 
     net_info = get_mesh_net(sat_src, sat_des)
 
@@ -223,6 +223,48 @@ def gs_selected(gen_data:str):
                  "mesh_net_pos": pos
                  }
     return mesh_info
+
+def verifiy_routing(isl_list, sat_src, sat_des, sats_info):
+
+    satellites = sats_info['satellites']
+    net_info = get_mesh_net(sat_src, sat_des)
+
+    # add isl according to isl.txt
+    mesh_net = nx.Graph()
+    mesh_net.add_nodes_from(net_info['sats_in_mesh_list'])
+    # isl_list = read_isls(gen_data, sats_info['num_of_all_satellite'])
+    for (a, b) in isl_list:
+        if a in net_info['sats_in_mesh_list'] and b in net_info['sats_in_mesh_list']:
+            dist = get_distance_betwenn_adj_sats(satellites[a], satellites[b], sats_info)
+            delay = round((dist / 3e8) * 1000, 2)
+            mesh_net.add_edge(a, b, weight=delay)
+
+    pos = nx.random_layout(mesh_net)
+    nodes_id = list(mesh_net.nodes)
+
+    node_id = 0
+    for x in range(len(net_info['orbits_list'])):
+        for y in range(len(net_info['n_sat_plane_list'])):
+            pos[nodes_id[node_id]][0] = x
+            pos[nodes_id[node_id]][1] = -y
+            node_id += 1
+
+    minWPath_vs_vt = nx.dijkstra_path(mesh_net, source=sat_src, target=sat_des)
+    minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=sat_src, target=sat_des)
+
+    nx.draw(mesh_net, pos, with_labels=True, font_size=10)
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='pink', nodelist=minWPath_vs_vt)
+
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='red', nodelist=[sat_src])
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='green', nodelist=[sat_des])
+
+    # node_labels = nx.get_node_attributes(mesh_net, name='pos')
+    # nx.draw_networkx_labels(mesh_net, pos, font_size=10, labels=node_labels)
+    # edge_labels = nx.get_edge_attributes(mesh_net, 'bandwidth')
+    # nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
+
+    plt.show()
+
 
 def get_mesh_net(sat_src, sat_des):
     n_orbits = 72
