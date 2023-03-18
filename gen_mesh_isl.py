@@ -155,8 +155,8 @@ def gs_selected(gen_data:str):
     # time = epoch + 800 * u.s
     ground_stations = read_ground_stations_extended(gen_data)
 
-    gs_sat_in_range_file = './starlink/starlink_info/ground_station_satellites_in_range.txt'
-    file_gs = open(gs_sat_in_range_file, 'w')
+    sat_data = os.listdir(gen_data)
+    file_gs = open(gen_data + sat_data[0] + '/ground_station_satellites_in_range.txt', 'w')
 
     ground_station_satellites_in_range = []
     for ground_station in ground_stations:
@@ -178,7 +178,7 @@ def gs_selected(gen_data:str):
 
         satellites_in_range = sorted(satellites_in_range)
         ground_station_satellites_in_range.append(satellites_in_range)
-
+    file_gs.close()
     # print('sate pos')
     # gs2sat_type = sat_selected(ground_station_satellites_in_range, sat_info)
     postions_sat_parsed = get_sat_row_and_column(ground_station_satellites_in_range, sats_info)
@@ -190,14 +190,51 @@ def gs_selected(gen_data:str):
     sat_two_final_selected.append((sat_two_final_selected[0][0] * n_sats_per_orbit + sat_two_final_selected[0][1]))
     sat_two_final_selected.append((sat_two_final_selected[1][0] * n_sats_per_orbit + sat_two_final_selected[1][1]))
 
+    sat_src = sat_two_final_selected[0][0] * 22 + sat_two_final_selected[0][1]
+    sat_des = sat_two_final_selected[1][0] * 22 + sat_two_final_selected[1][1]
+
+    net_info = get_mesh_net(sat_src, sat_des)
+
+    # add isl according to isl.txt
+    mesh_net = nx.Graph()
+    mesh_net.add_nodes_from(net_info['sats_in_mesh_list'])
+    isl_list = read_isls(gen_data, sats_info['num_of_all_satellite'])
+    for (a, b) in isl_list:
+        if a in net_info['sats_in_mesh_list'] and b in net_info['sats_in_mesh_list']:
+            dist = get_distance_betwenn_adj_sats(satellites[a], satellites[b], sats_info)
+            delay = round((dist / 3e8) * 1000, 2)
+            mesh_net.add_edge(a, b, weight=delay)
+
+    pos = nx.random_layout(mesh_net)
+    nodes_id = list(mesh_net.nodes)
+
+    node_id = 0
+    for x in range(len(net_info['orbits_list'])):
+        for y in range(len(net_info['n_sat_plane_list'])):
+            pos[nodes_id[node_id]][0] = x
+            pos[nodes_id[node_id]][1] = -y
+            node_id += 1
+
+    #add distance between adjacent-sats
+
+    mesh_info = {
+                 "sats_mesh_net_graph": mesh_net,
+                 "source2dest_sats": sat_two_final_selected,
+                 "mesh_net_pos": pos
+                 }
+    return mesh_info
+
+def get_mesh_net(sat_src, sat_des):
+    n_orbits = 72
+    n_sats_per_orbit = 22
+
+    sat_two_final_selected = []
+    sat_two_final_selected.append([sat_src // n_sats_per_orbit, sat_src % n_sats_per_orbit])
+    sat_two_final_selected.append([sat_des // n_sats_per_orbit, sat_des % n_sats_per_orbit])
+
+
     sat_connect2gs0_id = sat_two_final_selected[0]
     sat_connect2gs1_id = sat_two_final_selected[1]
-
-    # file_gs.write(str(sat_two_final_selected[2]))
-    # file_gs.write(',')
-    # file_gs.write(str(sat_two_final_selected[3]))
-    file_gs.close()
-
     # three situation to specifly direction
     flag = 0
     if sat_connect2gs0_id[0] == sat_connect2gs1_id[0]:
@@ -206,7 +243,6 @@ def gs_selected(gen_data:str):
         flag = 2
 
     # bulid mesh network
-    mesh_net = nx.Graph()
     orbit_begin = sat_connect2gs0_id[0]
     orbit_end = sat_connect2gs1_id[0]
 
@@ -247,7 +283,7 @@ def gs_selected(gen_data:str):
     n_sat_plane_list = [n_sat_of_plane_begin]
 
     temp_orbit = ((orbit_begin + 1) % n_orbits)
-    while(temp_orbit != orbit_end):
+    while (temp_orbit != orbit_end):
         orbits_list.append(temp_orbit)
         temp_orbit = ((temp_orbit + 1) % n_orbits)
     orbits_list.append(orbit_end)
@@ -258,48 +294,22 @@ def gs_selected(gen_data:str):
         temp_sat_num = ((temp_sat_num + 1) % n_sats_per_orbit)
     n_sat_plane_list.append(n_sat_of_plane_end)
 
-#situation one
+    # mesh_net = nx.Graph()
     sats_in_mesh_list = []
     for x in orbits_list:
         for y in n_sat_plane_list:
             sat_id = (x * n_sats_per_orbit + y)
-            mesh_net.add_node(sat_id, pos=(x, y))
+            # mesh_net.add_node(sat_id, pos=(x, y))
             sats_in_mesh_list.append(sat_id)
+    net_info = {
+        "orbits_list": orbits_list,
+        "n_sat_plane_list": n_sat_plane_list,
+        "sats_in_mesh_list": sats_in_mesh_list
+    }
 
-    # add isl according to isl.txt
-    delay_matrix = []
-    isl_list = read_isls(gen_data, sats_info['num_of_all_satellite'])
-    for (a, b) in isl_list:
-        if a in sats_in_mesh_list and b in sats_in_mesh_list:
-
-            dist = get_distance_betwenn_adj_sats(satellites[a], satellites[b], sats_info)
-            delay = round((dist / 3e8) * 1000, 2)
-            # delay_matrix.append(delay)
-
-            band = random.randint(500, 2000)
-            plr = random.randint(2, 15) / 1000
-
-            mesh_net.add_edge(a, b, weight=delay, bandwidth=band, plr=plr)
-
-    pos = nx.random_layout(mesh_net)
-    nodes_id = list(mesh_net.nodes)
-
-    node_id = 0
-    for x in range(len(orbits_list)):
-        for y in range(len(n_sat_plane_list)):
-            pos[nodes_id[node_id]][0] = x
-            pos[nodes_id[node_id]][1] = -y
-            node_id += 1
+    return net_info
 
 
-    #add distance between adjacent-sats
-
-    mesh_info = {
-                 "sats_mesh_net_graph": mesh_net,
-                 "source2dest_sats": sat_two_final_selected,
-                 "mesh_net_pos": pos
-                 }
-    return mesh_info
 
 def get_distance_betwenn_adj_sats(sat0_pos, sat1_pos, sats_info):
     """

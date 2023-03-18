@@ -150,7 +150,7 @@ class Mytopo():
 
         if self.enable_verbose_logs:
             OGDRouting_time = []
-            for i in range(0, 10):
+            for i in range(0, 1):
                 start_time = time.perf_counter()
                 route = OGDRouting(satellites, ground_station_satellites_in_range)
                 print('\nOGDRoute', route)
@@ -168,12 +168,13 @@ class Mytopo():
             # print("\nminWPath_vs_vt", minWPath_vs_vt)
 
             cal_time = []
-            for i in range(0, 10):
+            for i in range(0, 1):
                 start_time = time.perf_counter()
                 # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
                 # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
                 minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584,
                                                   target=1585)
+                print('\nminWPath_vs_vt', minWPath_vs_vt)
                 end_time = time.perf_counter()
                 time_sum = end_time - start_time
 
@@ -273,8 +274,9 @@ def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop
         next_node_n_src = n_src + dir_hop_horizontal
         next_node_n_des = n_des - dir_hop_horizontal
 
-        if n_src + dir_hop_horizontal or n_des - dir_hop_horizontal < 0:
+        if n_src + dir_hop_horizontal < 0:
             next_node_n_src = 71
+        if n_des - dir_hop_horizontal < 0:
             next_node_n_des = 71
 
         next_node_n_src %= 72
@@ -283,7 +285,7 @@ def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop
         next_node_des = next_node_n_des * 22 + m_des
 
         reward_s = abs(satellites[n_src * 22 + m_src].sublat) + abs(satellites[next_node_src].sublat)
-        reward_d = abs(satellites[n_des * 22, m_des].sublat) + abs(satellites[next_node_des].sublat)
+        reward_d = abs(satellites[n_des * 22 + m_des].sublat) + abs(satellites[next_node_des].sublat)
 
         if reward_s >= reward_d:
             route_from_s.append(next_node_src)

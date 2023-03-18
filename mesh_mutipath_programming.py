@@ -10,7 +10,7 @@ import gen_mesh_isl
 # filename_ground_stations_out = './gen_data2/starlink_info/ground_stations.txt'
 # output_file = './gen_data2/starlink_info/mesh_net_path.txt'
 
-gen_data = './starlink/'
+gen_data = './test_starlink/'
 filename_ground_stations_basic_in = './starlink/starlink_info/ground_stations_basic.txt'
 filename_ground_stations_out = './starlink/starlink_info/ground_stations.txt'
 output_file = './starlink/starlink_info/mesh_net_path.txt'
@@ -61,8 +61,8 @@ def mutipath_programming():
 
     # node_labels = nx.get_node_attributes(mesh_net, name='pos')
     # nx.draw_networkx_labels(mesh_net, pos, font_size=10, labels=node_labels)
-    edge_labels = nx.get_edge_attributes(mesh_net, 'bandwidth')
-    nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
+    # edge_labels = nx.get_edge_attributes(mesh_net, 'bandwidth')
+    # nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
 
     plt.show()
 
