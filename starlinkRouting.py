@@ -88,7 +88,7 @@ class Mytopo():
         # "epoch": epoch,
         # "satellites":satellites
         # }
-        ground_stations = read_ground_stations_extended(gen_data)
+        ground_stations = read_ground_stations_extended(gen_data)  # starlink/starlink_info/ground_stations.txt
         satellites = sat_info['satellites']
         epoch = sat_info['epoch']
         init_time = epoch + 0 * u.day
@@ -149,28 +149,37 @@ class Mytopo():
             print(ground_station_satellites_in_range)
 
         if self.enable_verbose_logs:
-            route = OGDRouting(satellites, ground_station_satellites_in_range)
-            print('\nroute', route)
+            OGDRouting_time = []
+            for i in range(0, 10):
+                start_time = time.perf_counter()
+                route = OGDRouting(satellites, ground_station_satellites_in_range)
+                print('\nOGDRoute', route)
+                end_time = time.perf_counter()
+                time_sum = end_time - start_time
+                OGDRouting_time.append(time_sum)
+            print('\nOGDRouting_time', OGDRouting_time)
 
         # Calculate shortest path distances
         if self.enable_verbose_logs:
             print("  > Calculating Floyd-Warshall for graph without ground-station relays")
 
-            minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
-            # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
-            print(minWPath_vs_vt)
+            # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
+            # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
+            # print("\nminWPath_vs_vt", minWPath_vs_vt)
 
-            # cal_time = []
-            # for i in range(0, 10):
-            #     start_time = time.perf_counter()
-            #     # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
-            #     dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
-            #     end_time = time.perf_counter()
-            #     time_sum = end_time - start_time
-            #
-            #     cal_time.append(time_sum)
-            #
-            # print(cal_time)
+            cal_time = []
+            for i in range(0, 10):
+                start_time = time.perf_counter()
+                # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
+                # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
+                minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584,
+                                                  target=1585)
+                end_time = time.perf_counter()
+                time_sum = end_time - start_time
+
+                cal_time.append(time_sum)
+
+            print("cal_time", cal_time)
 
 
             # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
@@ -193,7 +202,6 @@ def OGDRouting(satellites, ground_station_satellites_in_range):
             temp.insert(0, len(satellites) + gs1_index)
             temp.append(len(satellites) + gs2_index)
             route.append(temp)
-
             gs2_index -= 1
     return route
 
@@ -221,6 +229,7 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
 
                 hop_horizontal = min(abs(n_src - n_des), 72-abs(n_src - n_des))
                 hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
+
                 hop_sum = hop_horizontal + hop_vertical
 
                 if hop_sum < min_hop_sum:
@@ -242,19 +251,19 @@ def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop
     m_src = select_src_sat_id % 22
     m_des = select_des_sat_id % 22
 
-    hop_h = abs(n_src - n_des)
+    hop_h = n_src - n_des
 
-    if 0 < hop_h <= 72 / 2:
+    if -72/2 <= hop_h < 0 or hop_h > 72/2:
         dir_hop_horizontal = 1  # right 顺时针减 逆时针加
-    elif hop_h > 72 / 2:
+    elif hop_h < -72 / 2 or 0 < hop_h <= 72/2:
         dir_hop_horizontal = -1  # left
     else:
         dir_hop_horizontal = 0  # no movement
 
-    hop_v = abs(m_src - m_des)
-    if 0 < hop_v <= 22 / 2:
+    hop_v = m_src - m_des
+    if -22 / 2 <= hop_v < 0 or hop_v > 22/2:
         dir_hop_vertical = 1  # up 顺时针加 逆时针减
-    elif hop_v > 22 / 2:
+    elif hop_v < -22 / 2 or 0 < hop_v <= 22/2:
         dir_hop_vertical = -1  # down
     else:
         dir_hop_vertical = 0  # no movement
@@ -286,7 +295,7 @@ def orbit_gird_routing(satellites, select_src_sat_id, select_des_sat_id, dir_hop
     assert n_src == n_des
     route_from_d.reverse()
 
-    for i in range(hop_v):
+    for i in range(hop_v-1):
         if m_src + dir_hop_vertical < 0:
             next_node_m_src = 21
         else:
