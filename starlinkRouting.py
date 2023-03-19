@@ -150,10 +150,10 @@ class Mytopo():
 
         if self.enable_verbose_logs:
             OGDRouting_time = []
-            for i in range(0, 1):
+            for i in range(0, 10):
                 start_time = time.perf_counter()
                 route = OGDRouting(satellites, ground_station_satellites_in_range)
-                print('\nOGDRoute', route)
+                # print('\nOGDRoute', route)
                 end_time = time.perf_counter()
                 time_sum = end_time - start_time
                 OGDRouting_time.append(time_sum)
@@ -168,18 +168,18 @@ class Mytopo():
             # print("\nminWPath_vs_vt", minWPath_vs_vt)
 
             cal_time = []
-            for i in range(0, 1):
+            for i in range(0, 10):
                 start_time = time.perf_counter()
                 # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
                 # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
                 minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584,
                                                   target=1585)
-                print('\nminWPath_vs_vt', minWPath_vs_vt)
+                # print('\nminWPath_vs_vt', minWPath_vs_vt)
                 end_time = time.perf_counter()
                 time_sum = end_time - start_time
 
                 cal_time.append(time_sum)
-                print("cal_time", cal_time)
+            print("cal_time", cal_time)
         # verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info)
 
 
@@ -236,7 +236,7 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
             hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
 
             hop_sum = hop_horizontal + hop_vertical
-            print('src  des  hop', src_sat_id, des_sat_id, hop_sum)
+            # print('src  des  hop', src_sat_id, des_sat_id, hop_sum)
             if hop_sum < min_hop_sum:
                 min_hop_sum = hop_sum
                 select_src_sat_id = src_sat_id
@@ -254,7 +254,7 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
                     sel_src_type = src_type
                     sel_des_type = des_type
 
-    print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
+    # print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
     if sel_src_type == sel_des_type:
         return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
     else:
