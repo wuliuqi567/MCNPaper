@@ -148,39 +148,42 @@ class Mytopo():
             print(" \n> ground_station_satellites_in_range ")
             print(ground_station_satellites_in_range)
 
+        routing = []
         if self.enable_verbose_logs:
             OGDRouting_time = []
-            for i in range(0, 10):
-                start_time = time.perf_counter()
-                route = OGDRouting(satellites, ground_station_satellites_in_range)
-                # print('\nOGDRoute', route)
-                end_time = time.perf_counter()
-                time_sum = end_time - start_time
-                OGDRouting_time.append(time_sum)
-            print('\nOGDRouting_time', OGDRouting_time)
+            for i in range(0, 1):
+                # start_time = time.perf_counter()
+                routing = OGDRouting(satellites, ground_station_satellites_in_range)
+                print('\nOGDRoute', routing)
+                # end_time = time.perf_counter()
+                # time_sum = end_time - start_time
+                # OGDRouting_time.append(time_sum)
+            # print('\nOGDRouting_time', OGDRouting_time)
 
-        # verifiy_routing(isl_list, route[0][1], route[0][-2], sat_info)
+        verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
+
+
         # Calculate shortest path distances
+        minWPath_vs_vt = []
         if self.enable_verbose_logs:
-            print("  > Calculating Floyd-Warshall for graph without ground-station relays")
+            # print("  > Calculating Floyd-Warshall for graph without ground-station relays")
             # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
             # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
             # print("\nminWPath_vs_vt", minWPath_vs_vt)
 
             cal_time = []
-            for i in range(0, 10):
-                start_time = time.perf_counter()
+            for i in range(0, 1):
+                # start_time = time.perf_counter()
                 # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
                 # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
                 minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584,
                                                   target=1585)
-                # print('\nminWPath_vs_vt', minWPath_vs_vt)
-                end_time = time.perf_counter()
-                time_sum = end_time - start_time
-
-                cal_time.append(time_sum)
-            print("cal_time", cal_time)
-        # verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info)
+                print('\nminWPath_vs_vt', minWPath_vs_vt)
+                # end_time = time.perf_counter()
+                # time_sum = end_time - start_time
+                # cal_time.append(time_sum)
+            # print("cal_time", cal_time)
+        verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
 
 
             # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
@@ -213,8 +216,8 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     min_hop_sum = 65535
     select_src_sat_id = 0
     select_des_sat_id = 0
-    dir_hop_horizontal = 0
-    dir_hop_vertical = 0
+    # dir_hop_horizontal = 0
+    # dir_hop_vertical = 0
     hop_horizontal_last = 0
     sel_src_type = 2 # 0 descending 1 ascending  2 error
     sel_des_type = 2
@@ -256,12 +259,12 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
 
     # print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
     if sel_src_type == sel_des_type:
-        return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+        return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id)
     else:
-        return orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical)
+        return orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id)
 
 
-def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
+def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id):
 
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
@@ -289,6 +292,8 @@ def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id
     else:
         dir_hop_vertical = 0  # no movement
 
+    reward_s = 0
+    reward_d = 0
     for i in range(hop_h):
 
         next_node_n_src = n_src + dir_hop_horizontal
@@ -315,19 +320,228 @@ def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id
             n_des = next_node_n_des
 
     assert n_src == n_des
+
+    for i in range(hop_v-1):
+        next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, '+')
+        next_node = n_src * 22 + next_node_m_src
+        route_from_s.append(next_node)
+        m_src = next_node_m_src
+
     route_from_d.reverse()
+    return route_from_s + route_from_d
+
+
+def Route_hop_v_v2(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical, n_src, m_src, n_des, m_des, select_src_sat_id, select_des_sat_id, dir_decision):
+
+    if hop_v == 0:
+        route_from_d.reverse()
+        return route_from_s + route_from_d
+
+    for i in range(hop_v-1):
+        next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, '+')
+        next_node = n_src * 22 + next_node_m_src
+
+        if not Edge_congestion(route_from_s[-1], next_node):
+            route_from_s.append(n_src * 22 + next_node_m_src)
+            m_src = next_node_m_src
+        else:
+
+            # 链路拥塞，判断往前还是往后 对比横向链路距离
+            # forward_node_n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
+            forward_node_from_cur = Get_N_of_plane(n_src, dir_hop_horizontal, '+') * 22 + m_src
+            # backward_node_n_des = Get_N_of_plane(n_des, dir_hop_horizontal, '-')
+            backward_node_from_des = Get_N_of_plane(n_des, dir_hop_horizontal, '-') * 22 + m_des
+
+
+            if Get_N_of_plane(n_src, dir_hop_horizontal, '+') == Get_N_of_plane(select_des_sat_id//22, dir_hop_horizontal, '+'):  # 锁定右范围
+                dir_decision = 0  # backward
+            elif Get_N_of_plane(n_des, dir_hop_horizontal, '-') == Get_N_of_plane(select_src_sat_id//22, dir_hop_horizontal, '-'):   # 锁定左范围
+                dir_decision += 1  # forward
+            elif dir_decision > 0:
+                dir_decision += 1
+            else:
+                forward_reward = satellites[route_from_s[-1]].sublat + satellites[forward_node_from_cur]
+                backward_reward = satellites[route_from_d[-1]].sublat + satellites[backward_node_from_des]
+
+                if backward_reward > forward_reward:
+                    dir_decision = 0  # backward
+                else:
+                    dir_decision += 1  # forward
+
+            if dir_decision == 0:  # backward
+                for j in range(i):
+                    route_from_s.pop()
+                    m_src = Get_M_of_plane(m_src, dir_hop_vertical, '-')
+
+                n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '-')
+                n_des = Get_N_of_plane(n_des, dir_hop_horizontal, '-')
+                assert n_src == n_des
+
+                route_from_s.pop()
+                route_from_d.append(backward_node_from_des)
+
+                Route_hop_v_v2(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical,
+                               n_src, m_src, n_des, m_des, select_src_sat_id, select_des_sat_id, dir_decision)
+
+            elif dir_decision > 0:  # forward
+
+                route_from_s.append(forward_node_from_cur)
+                route_from_d.pop()
+                n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
+                n_des = Get_N_of_plane(n_des, dir_hop_horizontal, '+')
+                assert n_src == n_des
+                hop_v = m_des - m_src
+                Route_hop_v_v2(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical,
+                               n_src, m_src, n_des, m_des, select_src_sat_id, select_des_sat_id, dir_decision)
+
+
+def Route_hop_v(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical, n_src, m_src, n_des, m_des):
 
     for i in range(hop_v-1):
         if m_src + dir_hop_vertical < 0:
             next_node_m_src = 21
         else:
             next_node_m_src = (m_src + dir_hop_vertical) % 22
-        route_from_s.append(n_src * 22 + next_node_m_src)
-        m_src = next_node_m_src
 
-    return route_from_s + route_from_d
+        next_node = n_src * 22 + next_node_m_src
+        if not Edge_congestion(route_from_s[-1], next_node):
+            route_from_s.append(n_src * 22 + next_node_m_src)
+            m_src = next_node_m_src
+        else:
 
-def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id, dir_hop_horizontal, dir_hop_vertical):
+            if len(route_from_d) > 1:  # 不是最左边界
+                next_n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
+                next_n_node = next_n_src * 22 + m_src
+                reward = abs(satellites[route_from_s[-1]].sublat) + abs(satellites[next_n_node].sublat)
+                if reward > reward_d and Vertical_path_anylsis(next_n_src, m_src, m_des, dir_hop_horizontal): # 链路状况可行  # 选择此路径
+                    route_from_s.append(next_n_node)
+                    reward_d.pop()
+                    hop_v = m_des - m_src
+                    Route_hop_v(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical,
+                                next_n_src, m_src, next_n_src, m_des)
+                    break
+
+            for j in range(i):
+                route_from_s.pop()
+                if m_src - dir_hop_vertical < 0:
+                    m_src = 21
+                else:
+                    m_src = (m_src - dir_hop_vertical) % 22
+
+            reward_s = abs(satellites[route_from_s[-2]].sublat) + abs(satellites[route_from_s[-1]].sublat)
+            reward_d = abs(satellites[route_from_d[-2]].sublat) + abs(satellites[route_from_d[-1]].sublat)
+            if reward_s >= reward_d:
+                if len(route_from_s) > 1:
+                    route_from_d.append(route_from_s[-1])
+                    route_from_s.pop()
+                    if n_src - dir_hop_horizontal < 0:
+                        n_src = 71
+                    else:
+                        n_src = (n_src - dir_hop_horizontal) % 72
+
+                    if n_des + dir_hop_horizontal < 0:
+                        n_des = 71
+                    else:
+                        n_des = (n_des + dir_hop_horizontal) % 72
+                    assert n_src == n_des
+                else:
+                    route_from_s.append(route_from_d[-1])
+                    route_from_d.pop()
+                    if n_src + dir_hop_horizontal < 0:
+                        n_src = 71
+                    else:
+                        n_src = (n_src + dir_hop_horizontal) % 72
+
+                    if n_des - dir_hop_horizontal < 0:
+                        n_des = 71
+                    else:
+                        n_des = (n_des - dir_hop_horizontal) % 72
+                    assert n_src == n_des
+
+
+            else:
+                if len(route_from_d) > 1:
+                    route_from_s.append(route_from_d[-1])
+                    route_from_d.pop()
+                    if n_src + dir_hop_horizontal < 0:
+                        n_src = 71
+                    else:
+                        n_src = (n_src + dir_hop_horizontal) % 72
+
+                    if n_des - dir_hop_horizontal < 0:
+                        n_des = 71
+                    else:
+                        n_des = (n_des - dir_hop_horizontal) % 72
+                    assert n_src == n_des
+                else:
+                    route_from_d.append(route_from_s[-1])
+                    route_from_s.pop()
+                    if n_src - dir_hop_horizontal < 0:
+                        n_src = 71
+                    else:
+                        n_src = (n_src - dir_hop_horizontal) % 72
+
+                    if n_des + dir_hop_horizontal < 0:
+                        n_des = 71
+                    else:
+                        n_des = (n_des + dir_hop_horizontal) % 72
+                    assert n_src == n_des
+
+            Route_hop_v(satellites, route_from_s, route_from_d, hop_v, dir_hop_horizontal, dir_hop_vertical, n_src, m_src, n_des)
+
+def Edge_congestion(start_node, end_node)->int:
+    return 0
+
+def Vertical_path_anylsis(n_com, m_src, m_des, dir_hop_horizontal):
+    start_node = n_com * 22 + m_src
+    next_m_src = Get_M_of_plane(m_src, dir_hop_horizontal, '+')
+    while next_m_src != m_des:
+        next_node = n_com * 22 + next_m_src
+        if not Edge_congestion(start_node, next_node):
+            next_m_src = Get_M_of_plane(m_src, dir_hop_horizontal, '+')
+        else:
+            return False
+    return True
+
+
+
+
+
+def Get_N_of_plane(n_orbit, dir, ch):
+    if ch == '+':
+        if n_orbit + dir < 0:
+            n_orbit = 71
+        else:
+            n_orbit += dir
+            n_orbit %= 72
+        return n_orbit
+    if ch == '-':
+        if n_orbit - dir < 0:
+            n_orbit = 71
+        else:
+            n_orbit -= dir
+            n_orbit %= 72
+        return n_orbit
+
+def Get_M_of_plane(m_orbit, dir, ch):
+    if ch == '+':
+        if m_orbit + dir < 0:
+            m_orbit = 21
+        else:
+            m_orbit += dir
+            m_orbit %= 22
+        return m_orbit
+
+    if ch == '-':
+        if m_orbit - dir < 0:
+            m_orbit = 21
+        else:
+            m_orbit -= dir
+            m_orbit %= 22
+        return m_orbit
+
+
+def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id):
 
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
@@ -384,13 +598,19 @@ def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id
     assert m_src == m_des
     route_from_d.reverse()
 
-    for i in range(hop_h - 1):
-        if n_src + dir_hop_horizontal < 0:
-            next_node_n_src = 71
-        else:
-            next_node_n_src = (n_src + dir_hop_horizontal) % 72
+    for i in range(hop_h -1):
+        next_node_n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
+        next_node = next_node_n_src * 22 + m_src
         route_from_s.append(next_node_n_src * 22 + m_src)
         n_src = next_node_n_src
+
+    # for i in range(hop_h - 1):
+    #     if n_src + dir_hop_horizontal < 0:
+    #         next_node_n_src = 71
+    #     else:
+    #         next_node_n_src = (n_src + dir_hop_horizontal) % 72
+    #     route_from_s.append(next_node_n_src * 22 + m_src)
+    #     n_src = next_node_n_src
 
     return route_from_s + route_from_d
 

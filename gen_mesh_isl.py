@@ -224,7 +224,7 @@ def gs_selected(gen_data:str):
                  }
     return mesh_info
 
-def verifiy_routing(isl_list, sat_src, sat_des, sats_info):
+def verifiy_routing(isl_list, sat_src, sat_des, sats_info, routing):
 
     satellites = sats_info['satellites']
     net_info = get_mesh_net(sat_src, sat_des)
@@ -250,18 +250,19 @@ def verifiy_routing(isl_list, sat_src, sat_des, sats_info):
             node_id += 1
 
     minWPath_vs_vt = nx.dijkstra_path(mesh_net, source=sat_src, target=sat_des)
+
     minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=sat_src, target=sat_des)
 
     nx.draw(mesh_net, pos, with_labels=True, font_size=10)
-    nx.draw_networkx_nodes(mesh_net, pos, node_color='pink', nodelist=minWPath_vs_vt)
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='pink', nodelist=routing)
 
     nx.draw_networkx_nodes(mesh_net, pos, node_color='red', nodelist=[sat_src])
     nx.draw_networkx_nodes(mesh_net, pos, node_color='green', nodelist=[sat_des])
 
     # node_labels = nx.get_node_attributes(mesh_net, name='pos')
     # nx.draw_networkx_labels(mesh_net, pos, font_size=10, labels=node_labels)
-    # edge_labels = nx.get_edge_attributes(mesh_net, 'bandwidth')
-    # nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
+    edge_labels = nx.get_edge_attributes(mesh_net, 'weight')
+    nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
 
     plt.show()
 
