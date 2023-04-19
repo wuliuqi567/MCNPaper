@@ -162,7 +162,6 @@ class Mytopo():
 
         verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
 
-
         # Calculate shortest path distances
         minWPath_vs_vt = []
         if self.enable_verbose_logs:
@@ -185,14 +184,14 @@ class Mytopo():
             # print("cal_time", cal_time)
         verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
 
+        # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
+        # satellites,
+        # ground_stations,
+        # dist_sat_net_without_gs,
+        # ground_station_satellites_in_range,
+        # enable_verbose_logs = False)
+        # print(ground_fstate_dict)
 
-            # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
-            # satellites,
-            # ground_stations,
-            # dist_sat_net_without_gs,
-            # ground_station_satellites_in_range,
-            # enable_verbose_logs = False)
-            # print(ground_fstate_dict)
 
 # [[(614842.25, 1521, 1), (683955.5, 1085, 0), (687683.5625, 1064, 0), (693692.875, 1543, 1),
 def OGDRouting(satellites, ground_station_satellites_in_range):
@@ -200,7 +199,7 @@ def OGDRouting(satellites, ground_station_satellites_in_range):
     gs_size = len(ground_station_satellites_in_range)
     route = []
     for gs1_index in range(0, gs_size):
-        gs2_index = gs_size-1
+        gs2_index = gs_size - 1
         while gs2_index > gs1_index:
             temp = calculate_two_gs_routing(satellites, ground_station_satellites_in_range, gs1_index, gs2_index)
             temp.insert(0, len(satellites) + gs1_index)
@@ -219,7 +218,7 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     # dir_hop_horizontal = 0
     # dir_hop_vertical = 0
     hop_horizontal_last = 0
-    sel_src_type = 2 # 0 descending 1 ascending  2 error
+    sel_src_type = 2  # 0 descending 1 ascending  2 error
     sel_des_type = 2
 
     for dis_sat_to_src, src_sat_id, src_type in src_gs_sats_in_range:
@@ -235,8 +234,8 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
             m_src = src_sat_id % 22
             m_des = des_sat_id % 22
 
-            hop_horizontal = min(abs(n_src - n_des), 72-abs(n_src - n_des))
-            hop_vertical = min(abs(m_src - m_des), 22-abs(m_src - m_des))
+            hop_horizontal = min(abs(n_src - n_des), 72 - abs(n_src - n_des))
+            hop_vertical = min(abs(m_src - m_des), 22 - abs(m_src - m_des))
 
             hop_sum = hop_horizontal + hop_vertical
             # print('src  des  hop', src_sat_id, des_sat_id, hop_sum)
@@ -264,8 +263,230 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
         return orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id)
 
 
-def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id):
+def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
+    route_from_s = [select_src_sat_id]
+    route_from_d = [select_des_sat_id]
+    n_src = select_src_sat_id // 22
+    n_des = select_des_sat_id // 22
 
+    m_src = select_src_sat_id % 22
+    m_des = select_des_sat_id % 22
+
+    hop_h = n_src - n_des
+
+    if -72 / 2 <= hop_h < 0 or hop_h > 72 / 2:
+        dir_hop_horizontal = 1  # right 顺时针减 逆时针加
+    elif hop_h < -72 / 2 or 0 < hop_h <= 72 / 2:
+        dir_hop_horizontal = -1  # left
+    else:
+        dir_hop_horizontal = 0  # no movement
+
+    hop_v = m_src - m_des
+    if -22 / 2 <= hop_v < 0 or hop_v > 22 / 2:
+        dir_hop_vertical = 1  # up 顺时针加 逆时针减
+    elif hop_v < -22 / 2 or 0 < hop_v <= 22 / 2:
+        dir_hop_vertical = -1  # down
+    else:
+        dir_hop_vertical = 0  # no movement
+
+    H_h = abs(hop_h)
+    H_v = abs(hop_v)
+
+    while len(route_from_d) > 0 and len(route_from_s) > 0 and route_from_s[-1] // 22 != route_from_d[-1] // 22:  # 直到 n_src == n_des
+
+        curr_node_src = route_from_s[-1]
+        curr_node_des = route_from_d[-1]
+        next_node_n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
+        next_node_n_des = Get_N_of_plane(n_des, dir_hop_horizontal, '-')
+        next_node_src = next_node_n_src * 22 + m_src
+        next_node_des = next_node_n_des * 22 + m_des
+
+        reward_s = abs(satellites[curr_node_src].sublat) + abs(satellites[next_node_src].sublat)
+        reward_d = abs(satellites[curr_node_des].sublat) + abs(satellites[next_node_des].sublat)
+
+        if reward_s >= reward_d:
+
+            if LinkConnected(curr_node_src, next_node_src):
+                route_from_s.append(next_node_src)
+                n_src = next_node_n_src
+            else:  # 向前链路异常
+                next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, "+")
+                next_node_src = n_src * 22 + next_node_m_src
+                if LinkConnected(curr_node_src, next_node_src):  # 向上链路正常
+                    route_from_s.append(next_node_src)
+                    m_src = next_node_m_src
+                else:  # 向上链路异常 回退
+                    route_from_s = BacktrackingForHorizontal(route_from_s, '+', dir_hop_vertical)
+
+        else:
+
+            if LinkConnected(curr_node_des, next_node_des):
+                route_from_d.append(next_node_des)
+                n_des = next_node_n_des
+            else:  # 向后链路异常
+                next_node_m_des = Get_M_of_plane(m_des, dir_hop_vertical, '-')
+                next_node_des = n_des * 22 + next_node_m_des
+                if LinkConnected(curr_node_des, next_node_des):  # 向下的链路正常
+                    route_from_d.append(next_node_des)
+                    m_des = next_node_m_des
+                else:  # 向下的链路异常 回退
+                    route_from_d = BacktrackingForHorizontal(route_from_d, '-', dir_hop_vertical)
+
+    assert route_from_s[-1] // 22 == route_from_d[-1] // 22
+
+    nodes = LinksCheck(route_from_s, route_from_d, dir_hop_vertical)
+    if len(nodes) < 1:  # 链路故障 返回空为链路故障
+        nodes, route_from_s, route_from_d = BacktrackingForVertical(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical)
+        if len(route_from_s) > 0:  # 找到了路
+            route_from_s += nodes[1:-1]
+        else:
+            return  # 无路可走
+    else:  # 链路正常，路由计算完毕
+        route_from_s += nodes[1:-1]
+
+    route_from_d.reverse()
+    return route_from_s + route_from_d
+
+
+def LinksCheck(route_from_s, route_from_d, dir_hop_vertical):
+    """
+    垂直链路检查
+    如果 链路正常 返回包括上下节点的路径，
+    否则 链路异常，返回空list
+
+    :param route_from_s:
+    :param route_from_d:
+    :param dir_hop_vertical:
+    :return:
+    """
+
+    curr_node = route_from_s[-1]
+    n_src = curr_node // 22
+    n_des = route_from_d[-1] // 22
+    if n_des != n_src:
+        return []
+
+    m_src = curr_node % 22
+    m_des = route_from_d[-1] % 22
+    nodes = [curr_node]
+    while m_des != m_src:
+        next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, '+')
+        next_node = n_src * 22 + next_node_m_src
+        m_src = next_node_m_src
+        if LinkConnected(curr_node, next_node):
+            nodes.append(next_node)
+        else:
+            return []  # 发生错误 返回空
+    # nodes.pop()  # 最后一个即节点已经存在与 route_from_d[0]
+    return nodes
+
+
+def BacktrackingForVertical(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical):
+
+    """
+    在水平范围内左右寻找，
+    - - - - - - - - - 6 d
+    - - - - - - 2 3 4 1
+    - - - - - - v -- -
+    - - - - 1 3 5 - - -
+    s 2 4 5 4
+    即，在1 与 1 之间找路 采用向左向右循环找，找到一个即可
+    :param route:
+    :param route_from_s:
+    :param route_from_d:
+    :param dir_hop_horizontal:
+    :param dir_hop_vertical:
+    :return: new_route_from_s = []代表无路，
+    """
+
+    Rs_src = route_from_s
+    Rd_src = route_from_d
+    Rs_des = route_from_s
+    Rd_des = route_from_d
+
+    new_route_from_s = []
+    new_route_from_d = []
+
+    nodes = []
+    flag_1 = True
+    flag_2 = True
+    while flag_1 or flag_2:
+
+        next_n_src = Get_N_of_plane(Rs_src[-1] // 22, dir_hop_horizontal, '+')
+        next_node_src = next_n_src * 22 + Rs_src[-1] % 22
+
+        if flag_1 and len(Rd_src) > 1 and Rd_src[-1] % 22 == Rd_src[-2] % 22 and LinkConnected(Rs_src[-1], next_node_src):  # 向前链路正常
+            Rd_src.pop()
+            Rs_src.append(next_node_src)
+            nodes = LinksCheck(Rs_src, Rd_src, dir_hop_vertical)
+            if len(nodes) > 0:  # 垂直链路正常
+                new_route_from_s = Rs_src
+                new_route_from_d = Rd_src
+                break
+            else:
+                flag_1 = False  # 垂直链路异常 向前结束
+        else:
+            flag_1 = False  # 向前链路异常 向前结束
+
+        next_n_des = Get_N_of_plane(Rd_des[-1] // 22, dir_hop_horizontal, '-')
+        next_node_des = next_n_des * 22 + Rd_des[-1] % 22
+
+        if flag_2 and len(Rs_des) > 1 and Rs_des[-1] % 22 == Rs_des[-2] % 22 and LinkConnected(Rd_des[-1], next_node_des):  # 向后链路正常
+            Rs_des.pop()
+            Rd_des.append(next_node_des)
+            nodes = LinksCheck(Rs_des, Rd_des, dir_hop_vertical)
+            if len(nodes) > 0:  # 垂直链路正常
+                new_route_from_s = Rs_des
+                new_route_from_d = Rd_des
+                break
+            else:
+                flag_2 = False  # 处置链路异常 向前结束
+        else:
+            flag_2 = False  # 向后链路异常 向前结束
+
+    return nodes, new_route_from_s, new_route_from_d
+
+
+def BacktrackingForHorizontal(route, type_from_s_or_d, dir_hop_vertical):
+    """
+    向前向上链路故障时候进入，用于链路回退/回溯
+    解释说明：
+    for example:
+    route = [1,2,3,4,5]
+    temp_node->5
+    curr_node->4
+    5节点向前向上链路故障，回到4节点进行链路探查
+    如果 temp_node 和 curr_node 处于同一轨道内编号，那么从curr_node向上探查
+        如果 向上探查到链路正常，将其加入路径
+        否则 链路故障 再次回退
+    否则 再次回退
+    :param route:
+    :param type_from_s_or_d: 如果是 route = route_from_s 应该设为 '+'，否则 '-' 表示路由寻找的方向
+    :param dir_hop_vertical:
+    :return:
+    """
+    if len(route) == 1:  # 向前向上链路故障才进来，所以如果是从源/端点开始向上先前链路故障即为无路
+        return []
+    temp_node = route[-1]
+    route.pop()
+    curr_node_src = route[-1]
+
+    if temp_node % 22 == curr_node_src % 22:  # 横向退 m = m
+        n_src = curr_node_src // 22
+        m_src = curr_node_src % 22
+        next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, type_from_s_or_d)  # if s '+' else '-'
+        next_node_src = n_src * 22 + next_node_m_src
+        if LinkConnected(curr_node_src, next_node_src):  # 向上检查
+            route.append(next_node_src)
+        else:  # 链路不存在 再次回退
+            route = BacktrackingForHorizontal(route, type_from_s_or_d, dir_hop_vertical)
+    else:  # 纵向退
+        route = BacktrackingForHorizontal(route, type_from_s_or_d, dir_hop_vertical)
+
+    return route
+
+
+def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id):
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
 
@@ -277,24 +498,24 @@ def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id
 
     hop_h = n_src - n_des
 
-    if -72/2 <= hop_h < 0 or hop_h > 72/2:
+    if -72 / 2 <= hop_h < 0 or hop_h > 72 / 2:
         dir_hop_horizontal = 1  # right 顺时针减 逆时针加
-    elif hop_h < -72 / 2 or 0 < hop_h <= 72/2:
+    elif hop_h < -72 / 2 or 0 < hop_h <= 72 / 2:
         dir_hop_horizontal = -1  # left
     else:
         dir_hop_horizontal = 0  # no movement
 
     hop_v = m_src - m_des
-    if -22 / 2 <= hop_v < 0 or hop_v > 22/2:
+    if -22 / 2 <= hop_v < 0 or hop_v > 22 / 2:
         dir_hop_vertical = 1  # up 顺时针加 逆时针减
-    elif hop_v < -22 / 2 or 0 < hop_v <= 22/2:
+    elif hop_v < -22 / 2 or 0 < hop_v <= 22 / 2:
         dir_hop_vertical = -1  # down
     else:
         dir_hop_vertical = 0  # no movement
 
     reward_s = 0
     reward_d = 0
-    for i in range(hop_h):
+    for i in range(abs(hop_h)):
 
         next_node_n_src = n_src + dir_hop_horizontal
         next_node_n_des = n_des - dir_hop_horizontal
@@ -321,7 +542,7 @@ def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id
 
     assert n_src == n_des
 
-    for i in range(hop_v-1):
+    for i in range(abs(hop_v) - 1):
         next_node_m_src = Get_M_of_plane(m_src, dir_hop_vertical, '+')
         next_node = n_src * 22 + next_node_m_src
         route_from_s.append(next_node)
@@ -331,25 +552,21 @@ def orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id
     return route_from_s + route_from_d
 
 
-def OGDRouting(sat_src, sat_des, Hv, Hh, dv, dh):
+def LinkConnected(start_node, end_node) -> int:  # 链路连通
 
-
-def Edge_congestion(start_node, end_node)->int:
     return 0
+
 
 def Vertical_path_anylsis(n_com, m_src, m_des, dir_hop_horizontal):
     start_node = n_com * 22 + m_src
     next_m_src = Get_M_of_plane(m_src, dir_hop_horizontal, '+')
     while next_m_src != m_des:
         next_node = n_com * 22 + next_m_src
-        if not Edge_congestion(start_node, next_node):
+        if not LinkConnected(start_node, next_node):
             next_m_src = Get_M_of_plane(m_src, dir_hop_horizontal, '+')
         else:
             return False
     return True
-
-
-
 
 
 def Get_N_of_plane(n_orbit, dir, ch):
@@ -367,6 +584,7 @@ def Get_N_of_plane(n_orbit, dir, ch):
             n_orbit -= dir
             n_orbit %= 72
         return n_orbit
+
 
 def Get_M_of_plane(m_orbit, dir, ch):
     if ch == '+':
@@ -387,7 +605,6 @@ def Get_M_of_plane(m_orbit, dir, ch):
 
 
 def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id):
-
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
 
@@ -443,7 +660,7 @@ def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id
     assert m_src == m_des
     route_from_d.reverse()
 
-    for i in range(hop_h -1):
+    for i in range(hop_h - 1):
         next_node_n_src = Get_N_of_plane(n_src, dir_hop_horizontal, '+')
         next_node = next_node_n_src * 22 + m_src
         route_from_s.append(next_node_n_src * 22 + m_src)
@@ -458,6 +675,7 @@ def orbit_gird_routing_difftype(satellites, select_src_sat_id, select_des_sat_id
     #     n_src = next_node_n_src
 
     return route_from_s + route_from_d
+
 
 def read_tles(gen_data):
     """
