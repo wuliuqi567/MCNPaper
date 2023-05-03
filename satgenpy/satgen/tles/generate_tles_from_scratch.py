@@ -21,6 +21,8 @@
 # SOFTWARE.
 
 import math
+import os.path
+
 from sgp4.exporter import export_tle
 from sgp4.api import Satrec, WGS72
 from sgp4.api import jday

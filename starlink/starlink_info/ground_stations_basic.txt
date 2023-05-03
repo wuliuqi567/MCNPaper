@@ -1,2 +1,0 @@
-0,New-York-Newark,40.717042,-74.003663,0
-1,Los-Angeles-Long-Beach-Santa-Ana,34.031656,-118.241716,0

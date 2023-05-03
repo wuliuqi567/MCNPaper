@@ -67,130 +67,24 @@ SATELLITE_CONE_RADIUS_M = ALTITUDE_M / math.tan(math.radians(elevation_angle))
 
 MAX_GSL_LENGTH_M = math.sqrt(math.pow(SATELLITE_CONE_RADIUS_M, 2) + math.pow(ALTITUDE_M, 2))
 
+graphs_sat_net_graph_only_satellites_with_isls = nx.Graph()
+graphs_sat_net_graph_all_with_only_gsls = nx.Graph()
 
-class Mytopo():
-    def __init__(self, enable_verbose_logs=False, **opts):
-        self.enable_verbose_logs = enable_verbose_logs
-        # network Graphs
-        self.graphs_sat_net_graph_only_satellites_with_isls = nx.Graph()
-        self.graphs_sat_net_graph_all_with_only_gsls = nx.Graph()
 
-        # interfaces info
-        self.total_num_isls = 0
-        # self.num_isls_per_sat = []
-        # self.sat_neighbor_to_if = {}
+enable_verbose_logs = True
+# network Graphs
 
-        sat_info = read_tles(gen_data)
-        # print('\n>gen_data', sat_info)
-        # Dictionary:{
-        # "n_orbits": n_orbits,
-        # "n_sats_per_orbit": n_sats_per_orbit,
-        # "num_of_all_satellite": n_orbits * n_sats_per_orbit,
-        # "epoch": epoch,
-        # "satellites":satellites
-        # }
-        ground_stations = read_ground_stations_extended(gen_data)  # starlink/starlink_info/ground_stations.txt
-        satellites = sat_info['satellites']
-        epoch = sat_info['epoch']
-        init_time = epoch + 0 * u.day
-        # graph Information
-        for i in range(len(satellites)):
-            self.graphs_sat_net_graph_only_satellites_with_isls.add_node(i)
-        for i in range(len(satellites) + len(ground_stations)):
-            self.graphs_sat_net_graph_all_with_only_gsls.add_node(i)
+# interfaces info
+# self.total_num_isls = 0
+# self.num_isls_per_sat = []
+# self.sat_neighbor_to_if = {}
 
-        isl_list = read_isls(gen_data, sat_info['num_of_all_satellite'])
 
-        for (a, b) in isl_list:
-            sat_distance_m = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(init_time))
-            # if sat_distance_m > MAX_ISL_LENGTH_M:
-            #     raise ValueError(
-            #         "The distance between two satellites (%d and %d) "
-            #         "with an ISL exceeded the maximum ISL length (%.2fm > %.2fm at t=%dns)"
-            #         % (a, b, sat_distance_m, MAX_ISL_LENGTH_M, time)
-            #     )
+def OGDRoutingTest(satellites, ground_station_satellites_in_range, graphs_sat_net):
 
-            delay = round(sat_distance_m / light_speed, 4) * 1000
-            self.graphs_sat_net_graph_only_satellites_with_isls.add_edge(a, b, weight=delay)
-            self.graphs_sat_net_graph_all_with_only_gsls.add_edge(a, b, weight=delay)
-
-        if self.enable_verbose_logs:
-            print("  > Total ISLs............. " + str(len(isl_list)))
-
-        if self.enable_verbose_logs:
-            print("\n  > Epoch.................. " + str(epoch))
-
-        ground_station_satellites_in_range = []
-        for ground_station in ground_stations:
-            # Find satellites in range
-            satellites_in_range = []
-            for sid in range(len(satellites)):
-                distance_m = distance_m_ground_station_to_satellite(
-                    ground_station,
-                    satellites[sid],
-                    str(epoch),
-                    str(epoch)
-                )
-                # sat_type = ascending_or_descending_of_satellite(satellites[sid], str(each_time))
-                # print('type', sat_type)
-                if distance_m <= MAX_GSL_LENGTH_M:
-                    satellites_in_range.append(
-                        (distance_m, sid, ascending_or_descending_of_satellite(satellites[sid], str(epoch))))
-                    # graph info
-                    delay = round(distance_m / light_speed, 4) * 1000
-                    # print("\ngs2sat---->  ", delay)
-                    self.graphs_sat_net_graph_all_with_only_gsls.add_edge(sid, len(satellites) + ground_station["gid"],
-                                                                          weight=delay)
-            satellites_in_range = sorted(satellites_in_range)
-            ground_station_satellites_in_range.append(satellites_in_range)
-
-        if self.enable_verbose_logs:
-            print(" \n> ground_station_satellites_in_range ")
-            print(ground_station_satellites_in_range)
-
-        routing = []
-        if self.enable_verbose_logs:
-            OGDRouting_time = []
-            for i in range(0, 1):
-                # start_time = time.perf_counter()
-                routing = OGDRouting(satellites, ground_station_satellites_in_range)
-                print('\nOGDRoute', routing)
-                # end_time = time.perf_counter()
-                # time_sum = end_time - start_time
-                # OGDRouting_time.append(time_sum)
-            # print('\nOGDRouting_time', OGDRouting_time)
-
-        verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
-
-        # Calculate shortest path distances
-        minWPath_vs_vt = []
-        if self.enable_verbose_logs:
-            # print("  > Calculating Floyd-Warshall for graph without ground-station relays")
-            # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
-            # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
-            # print("\nminWPath_vs_vt", minWPath_vs_vt)
-
-            cal_time = []
-            for i in range(0, 1):
-                # start_time = time.perf_counter()
-                # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
-                # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
-                minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584,
-                                                  target=1585)
-                print('\nminWPath_vs_vt', minWPath_vs_vt)
-                # end_time = time.perf_counter()
-                # time_sum = end_time - start_time
-                # cal_time.append(time_sum)
-            # print("cal_time", cal_time)
-        verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
-
-        # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
-        # satellites,
-        # ground_stations,
-        # dist_sat_net_without_gs,
-        # ground_station_satellites_in_range,
-        # enable_verbose_logs = False)
-        # print(ground_fstate_dict)
+    access_sat = calculate_two_gs_routing(satellites, ground_station_satellites_in_range, 0, 1)
+    minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net, source=access_sat[0], target=access_sat[1])
+    return minWPath_vs_vt
 
 
 # [[(614842.25, 1521, 1), (683955.5, 1085, 0), (687683.5625, 1064, 0), (693692.875, 1543, 1),
@@ -224,10 +118,6 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     for dis_sat_to_src, src_sat_id, src_type in src_gs_sats_in_range:
         for dis_sat_to_des, des_sat_id, des_type in des_gs_sats_in_range:
 
-            # if src_type != des_type:
-            #     continue
-            # else:
-
             n_src = src_sat_id // 22
             n_des = des_sat_id // 22
 
@@ -256,12 +146,14 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
                     sel_src_type = src_type
                     sel_des_type = des_type
 
+    return [select_src_sat_id, select_des_sat_id]
+
     # print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
-    if sel_src_type == sel_des_type:
-        # return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id)
-        return OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id)
-    else:
-        return OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id)
+    # if sel_src_type == sel_des_type:
+    #     # return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id)
+    #     return OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id)
+    # else:
+    #     return OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id)
 
 
 def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
@@ -288,7 +180,8 @@ def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
     else:
         dir_hop_vertical = 0  # no movement
 
-    while len(route_from_s) > 0 and len(route_from_d) > 0 and route_from_s[-1] // 22 != route_from_d[-1] // 22:  # 直到 n_src == n_des
+    while len(route_from_s) > 0 and len(route_from_d) > 0 and route_from_s[-1] // 22 != route_from_d[
+        -1] // 22:  # 直到 n_src == n_des
 
         curr_node_src = route_from_s[-1]
         curr_node_des = route_from_d[-1]
@@ -300,9 +193,9 @@ def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
         reward_s = abs(satellites[curr_node_src].sublat) + abs(satellites[next_node_src].sublat)
         reward_d = abs(satellites[curr_node_des].sublat) + abs(satellites[next_node_des].sublat)
 
-        if reward_s >= reward_d:
+        if reward_s > reward_d:
 
-            if LinkConnected(curr_node_src, next_node_src):   # 向前正常
+            if LinkConnected(curr_node_src, next_node_src):  # 向前正常
                 route_from_s.append(next_node_src)
             else:  # 向前链路异常
                 next_node_m_src = Get_M_of_plane(curr_node_src % 22, dir_hop_vertical, "+")  # 向上查找
@@ -329,7 +222,8 @@ def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
 
     nodes = VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical)
     if len(nodes) < 1:  # 链路故障 返回空为链路故障
-        nodes, route_from_s, route_from_d = VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical)
+        nodes, route_from_s, route_from_d = VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal,
+                                                                 dir_hop_vertical)
         if len(route_from_s) > 0:  # 找到了路
             route_from_s += nodes[1:-1]
         else:
@@ -376,8 +270,8 @@ def HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical):
 
     return route
 
-def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical):
 
+def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical):
     """
     在左右范围内上下寻找，
     - - - - - - - - - 6 d
@@ -410,7 +304,8 @@ def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop
         next_n_src = Get_N_of_plane(Rs_src[-1] // 22, dir_hop_horizontal, '+')
         next_node_src = next_n_src * 22 + Rs_src[-1] % 22
 
-        if flag_1 and len(Rd_src) > 1 and Rd_src[-1] % 22 == Rd_src[-2] % 22 and LinkConnected(Rs_src[-1], next_node_src):  # 向前链路正常
+        if flag_1 and len(Rd_src) > 1 and Rd_src[-1] % 22 == Rd_src[-2] % 22 and LinkConnected(Rs_src[-1],
+                                                                                               next_node_src):  # 向前链路正常
             Rd_src.pop()
             Rs_src.append(next_node_src)
             nodes = VerticalLinksCheckForA2A(Rs_src, Rd_src, dir_hop_vertical)
@@ -424,7 +319,8 @@ def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop
         next_n_des = Get_N_of_plane(Rd_des[-1] // 22, dir_hop_horizontal, '-')
         next_node_des = next_n_des * 22 + Rd_des[-1] % 22
 
-        if flag_2 and len(Rs_des) > 1 and Rs_des[-1] % 22 == Rs_des[-2] % 22 and LinkConnected(Rd_des[-1], next_node_des):  # 向后链路正常
+        if flag_2 and len(Rs_des) > 1 and Rs_des[-1] % 22 == Rs_des[-2] % 22 and LinkConnected(Rd_des[-1],
+                                                                                               next_node_des):  # 向后链路正常
             Rs_des.pop()
             Rd_des.append(next_node_des)
             nodes = VerticalLinksCheckForA2A(Rs_des, Rd_des, dir_hop_vertical)
@@ -468,9 +364,6 @@ def VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical):
     return nodes
 
 
-
-
-
 def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
@@ -495,7 +388,8 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
     else:
         dir_hop_vertical = 0  # no movement
 
-    while len(route_from_s) and len(route_from_d) and route_from_s[-1] % 22 != route_from_d[-1] % 22:  # 直到 n_src == n_des
+    while len(route_from_s) and len(route_from_d) and route_from_s[-1] % 22 != route_from_d[
+        -1] % 22:  # 直到 n_src == n_des
 
         curr_node_src = route_from_s[-1]
         curr_node_des = route_from_d[-1]
@@ -507,7 +401,7 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
         reward_s = abs(satellites[curr_node_src].sublat) + abs(satellites[next_node_src].sublat)
         reward_d = abs(satellites[curr_node_des].sublat) + abs(satellites[next_node_des].sublat)
 
-        if reward_s <= reward_d:
+        if reward_s < reward_d:
             if LinkConnected(curr_node_src, next_node_src):  # 向上链路正常
                 route_from_s.append(next_node_src)
             else:  # 向上链路异常
@@ -520,7 +414,7 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
         else:
             if LinkConnected(curr_node_des, next_node_des):  # 正常
                 route_from_d.append(next_node_des)
-            else: # 向下链路异常
+            else:  # 向下链路异常
                 next_node_n_des = Get_N_of_plane(curr_node_des // 22, dir_hop_horizontal, '-')
                 next_node_des = next_node_n_des * 22 + curr_node_des % 22
                 if LinkConnected(curr_node_des, next_node_des):  # 向右链路正常
@@ -533,9 +427,10 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
     elif route_from_s[-1] % 22 != route_from_d[-1] % 22:
         return []
 
-    nodes = HorizontalLinkCheckForA2D(route_from_s, route_from_d)
+    nodes = HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal)
     if len(nodes) < 1:  # 链路故障， 链路故障 返回空为链路故障
-        nodes, route_from_s, route_from_d = HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical)
+        nodes, route_from_s, route_from_d = HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal,
+                                                                   dir_hop_vertical)
         if len(route_from_s) > 0:  # 找到了路
             route_from_s += nodes[1:-1]
         else:
@@ -630,7 +525,8 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
 
         next_m_down = Get_M_of_plane(Rd_down[-1] % 22, dir_hop_vertical, '-')
         next_node_down = (Rd_down[-1] // 22) * 22 + next_m_down
-        if flag_down and len(Rs_down) > 1 and Rs_down[-1] // 22 == Rs_down[-2] // 22 and LinkConnected(Rd_down, next_node_down):
+        if flag_down and len(Rs_down) > 1 and Rs_down[-1] // 22 == Rs_down[-2] // 22 and LinkConnected(Rd_down,
+                                                                                                       next_node_down):
             Rs_down.pop()
             Rd_down.append(next_node_down)
             nodes = HorizontalLinkCheckForA2D(Rs_down, Rd_down, dir_hop_horizontal)
@@ -1210,8 +1106,213 @@ def get_positive_int(ne_or_po_num: int):
 
 def main():
     print('init customized topology')
-    lion_topo = Mytopo(enable_verbose_logs=True)
+    sat_info = read_tles(gen_data)
+    # print('\n>gen_data', sat_info)
+    # Dictionary:{
+    # "n_orbits": n_orbits,
+    # "n_sats_per_orbit": n_sats_per_orbit,
+    # "num_of_all_satellite": n_orbits * n_sats_per_orbit,
+    # "epoch": epoch,
+    # "satellites":satellites
+    # }
+    ground_stations = read_ground_stations_extended(gen_data)  # starlink/starlink_info/ground_stations.txt
+    satellites = sat_info['satellites']
+    epoch = sat_info['epoch']
+    init_time = epoch + 0 * u.day
+    # graph Information
+    for i in range(len(satellites)):
+        graphs_sat_net_graph_only_satellites_with_isls.add_node(i)
+    for i in range(len(satellites) + len(ground_stations)):
+        graphs_sat_net_graph_all_with_only_gsls.add_node(i)
+
+    isl_list = read_isls(gen_data, sat_info['num_of_all_satellite'])
+
+    for (a, b) in isl_list:
+        sat_distance_m = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(init_time))
+        # if sat_distance_m > MAX_ISL_LENGTH_M:
+        #     raise ValueError(
+        #         "The distance between two satellites (%d and %d) "
+        #         "with an ISL exceeded the maximum ISL length (%.2fm > %.2fm at t=%dns)"
+        #         % (a, b, sat_distance_m, MAX_ISL_LENGTH_M, time)
+        #     )
+
+        delay = round(sat_distance_m / light_speed, 4) * 1000
+        graphs_sat_net_graph_only_satellites_with_isls.add_edge(a, b, weight=delay)
+        graphs_sat_net_graph_all_with_only_gsls.add_edge(a, b, weight=delay)
+
+    if enable_verbose_logs:
+        print("  > Total ISLs............. " + str(len(isl_list)))
+
+    if enable_verbose_logs:
+        print("\n  > Epoch.................. " + str(epoch))
+
+    ground_station_satellites_in_range = []
+    for ground_station in ground_stations:
+        # Find satellites in range
+        satellites_in_range = []
+        for sid in range(len(satellites)):
+            distance_m = distance_m_ground_station_to_satellite(
+                ground_station,
+                satellites[sid],
+                str(epoch),
+                str(epoch)
+            )
+            # sat_type = ascending_or_descending_of_satellite(satellites[sid], str(each_time))
+            # print('type', sat_type)
+            if distance_m <= MAX_GSL_LENGTH_M:
+                satellites_in_range.append(
+                    (distance_m, sid, ascending_or_descending_of_satellite(satellites[sid], str(epoch))))
+                # graph info
+                delay = round(distance_m / light_speed, 4) * 1000
+                # print("\ngs2sat---->  ", delay)
+                graphs_sat_net_graph_all_with_only_gsls.add_edge(sid, len(satellites) + ground_station["gid"],
+                                                                 weight=delay)
+        satellites_in_range = sorted(satellites_in_range)
+        ground_station_satellites_in_range.append(satellites_in_range)
+
+    if enable_verbose_logs:
+        print(" \n> ground_station_satellites_in_range ")
+        print(ground_station_satellites_in_range)
+
+    routing = []
+    if enable_verbose_logs:
+        OGDRouting_time = []
+        for i in range(0, 1):
+            start_time = time.perf_counter()
+            routing = OGDRouting(satellites, ground_station_satellites_in_range)
+            # print('\nOGDRoute', routing)
+            end_time = time.perf_counter()
+            time_sum = end_time - start_time
+            OGDRouting_time.append(time_sum)
+        print('\nOGDRouting_time', OGDRouting_time)
+
+    verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
+
+    # Calculate shortest path distances
+    minWPath_vs_vt = []
+    if enable_verbose_logs:
+        # print("  > Calculating Floyd-Warshall for graph without ground-station relays")
+        # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
+        # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
+        # print("\nminWPath_vs_vt", minWPath_vs_vt)
+
+        cal_time = []
+        for i in range(0, 1):
+            start_time = time.perf_counter()
+            # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
+            # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
+            minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=1584,
+                                              target=1585)
+            # print('\nminWPath_vs_vt', minWPath_vs_vt)
+            end_time = time.perf_counter()
+            time_sum = end_time - start_time
+            cal_time.append(time_sum)
+        print("cal_time", cal_time)
+    verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
+
+    # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
+    # satellites,
+    # ground_stations,
+    # dist_sat_net_without_gs,
+    # ground_station_satellites_in_range,
+    # enable_verbose_logs = False)
+    # print(ground_fstate_dict)
+
+
+def mainTest():
+    print('init customized topology')
+    sat_info = read_tles(gen_data)
+    # print('\n>gen_data', sat_info)
+    # Dictionary:{
+    # "n_orbits": n_orbits,
+    # "n_sats_per_orbit": n_sats_per_orbit,
+    # "num_of_all_satellite": n_orbits * n_sats_per_orbit,
+    # "epoch": epoch,
+    # "satellites":satellites
+    # }
+    ground_stations = read_ground_stations_extended(gen_data)  # starlink/starlink_info/ground_stations.txt
+    satellites = sat_info['satellites']
+    epoch = sat_info['epoch']
+    init_time = epoch + 0 * u.day
+
+    for i in range(len(satellites)):
+        graphs_sat_net_graph_only_satellites_with_isls.add_node(i)
+    for i in range(len(satellites) + len(ground_stations)):
+        graphs_sat_net_graph_all_with_only_gsls.add_node(i)
+
+    isl_list = read_isls(gen_data, sat_info['num_of_all_satellite'])
+
+    if not os.path.exists("./output/"):
+        os.makedirs("./output/")
+    file_OGDRoute = open("./output/OGDRoute.txt", 'w+')
+    file_OGDRouteDelay = open("./output/OGDRouteDelay.txt", 'w+')
+
+    # total_iterations = (simulation_end_time_s / time_step_ms)
+    for time_since_epoch_ms in range(0, simulation_end_time_s * 1000, time_step_ms):
+
+        graphs_sat_net_all_node = nx.create_empty_copy(graphs_sat_net_graph_all_with_only_gsls)
+        time_since_epoch = epoch + time_since_epoch_ms * u.ms
+        for (a, b) in isl_list:
+            sat_distance_m = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(time_since_epoch))
+            delay = round(sat_distance_m / light_speed, 4) * 1000
+            graphs_sat_net_all_node.add_edge(a, b, weight=delay)
+
+        if enable_verbose_logs:
+            print("\n  > Epoch.................. " + str(epoch))
+            print("\n  > Epoch.................. " + str(time_since_epoch))
+
+        ground_station_satellites_in_range = []
+        for ground_station in ground_stations:
+            # Find satellites in range
+            satellites_in_range = []
+            for sid in range(len(satellites)):
+                distance_m = distance_m_ground_station_to_satellite(
+                    ground_station,
+                    satellites[sid],
+                    str(epoch),
+                    str(time_since_epoch)
+                )
+                if distance_m <= MAX_GSL_LENGTH_M:
+                    satellites_in_range.append(
+                        (distance_m, sid, 0))
+                    # graph info
+                    delay = round(distance_m / light_speed, 4) * 1000
+                    # print('sid', sid, 'gid', len(satellites) + ground_station["gid"])
+                    graphs_sat_net_all_node.add_edge(sid, len(satellites) + ground_station["gid"], weight=delay)
+            satellites_in_range = sorted(satellites_in_range)
+            ground_station_satellites_in_range.append(satellites_in_range)
+
+        if enable_verbose_logs:
+            print(" \n> ground_station_satellites_in_range ")
+            for gs in ground_station_satellites_in_range:
+                print(gs)
+
+
+        routing = []
+
+        if enable_verbose_logs:
+            print('\nOGDRoute', routing)
+            temp = OGDRoutingTest(satellites, ground_station_satellites_in_range, graphs_sat_net_all_node)
+            routing = [1584] + temp + [1585]
+
+            delay = sum(graphs_sat_net_all_node[routing[i]][routing[i + 1]]['weight'] for i in range(len(routing) - 1))
+
+            print(routing)
+
+            for node in routing:
+                file_OGDRoute.write(str(node) + ',')
+            file_OGDRoute.write('\n')
+
+            file_OGDRouteDelay.write(str(time_since_epoch_ms))
+            file_OGDRouteDelay.write(",")
+            file_OGDRouteDelay.write(str(delay))
+            file_OGDRouteDelay.write('\n')
+
+    # verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
+    file_OGDRoute.close()
+    file_OGDRouteDelay.close()
+
 
 
 if __name__ == "__main__":
-    main()
+    mainTest()
