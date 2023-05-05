@@ -10,6 +10,7 @@ from gen_mesh_isl import verifiy_routing
 import matplotlib.pyplot as plt
 import random
 import numpy as np
+import copy
 
 EARTH_RADIUS = 6378135.0
 ECCENTRICITY = 0.0000001  # Circular orbits are zero, but pyephem does not permit 0, so lowest possible value
@@ -619,10 +620,10 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
     :param dir_hop_vertical:
     :return: new_route_from_s = []代表无路，
     """
-    Rs_up = route_from_s
-    Rd_up = route_from_d
-    Rs_down = route_from_s
-    Rd_down = route_from_d
+    Rs_up = copy.deepcopy(route_from_s)
+    Rd_up = copy.deepcopy(route_from_d)
+    Rs_down = copy.deepcopy(route_from_s)
+    Rd_down = copy.deepcopy(route_from_d)
 
     new_route_from_s = []
     new_route_from_d = []
@@ -640,7 +641,7 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
             nodes = HorizontalLinkCheckForA2D(Rs_up, Rd_up, dir_hop_horizontal, mesh_net)
             if len(nodes):  # 水平链路正常
                 new_route_from_s = Rs_up
-                new_route_from_d = Rs_down
+                new_route_from_d = Rd_up
                 break
         else:
             flag_up = False  # 向上链路异常 向上结束
