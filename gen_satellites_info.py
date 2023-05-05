@@ -27,6 +27,7 @@ def gen_info(output_generated_data_dir, simulation_end_time_s, time_step_ms,
     # simulation_end_time_s = 1500
     # time_step_ms = 10000
     gs_selection = "twostation" # ground_stations_{top_100, paris_moscow_grid}
+    # gs_selection = "ground_stations_top_1000" # ground_stations_{top_100, paris_moscow_grid}
 
     isl_selection = 'isls_plus_grid'  # isls_{none, plus_grid}
     dynamic_state_algorithm = 'algorithm_free_one_only_over_isls' # algorithm_{free_one_only_{gs_relays,_over_isls}, paired_many_only_over_isls}

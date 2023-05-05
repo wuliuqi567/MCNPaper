@@ -31,8 +31,48 @@ Distributed On-Demand Routing for LEO Mega-Constellations: A Starlink Case Study
 
 Dynamic Routing for Software-Defined LEO Satellite Networks based on ISL Attributes
 
+### 配置信息
+starlink
+```
+satellite_network_dir_and_name=test_starlink
+ALTITUDE_M=550000
+Elevation_angle=25
+NUM_ORBS=72
+NUM_SATS_PER_ORB=22
+INCLINATION_DEGREE=53
+simulation_end_time_s=600
+Time_step_ms=100
+isl_data_rate_megabit_per_s=10.0
+gsl_data_rate_megabit_per_s=10.0
+isl_max_queue_size_pkts=100
+gsl_max_queue_size_pkts=100
+```
+```
+satellite_network_dir_and_name=test_kuiper
+ALTITUDE_M=630000
+Elevation_angle=30
+NUM_ORBS=34
+NUM_SATS_PER_ORB=34
+INCLINATION_DEGREE=52
+simulation_end_time_s=600
+Time_step_ms=100
+isl_data_rate_megabit_per_s=10.0
+gsl_data_rate_megabit_per_s=10.0
+isl_max_queue_size_pkts=100
+gsl_max_queue_size_pkts=100
+```
+```
+satellite_network_dir_and_name=test_telesat
+ALTITUDE_M=630000
+Elevation_angle=10
+NUM_ORBS=27
+NUM_SATS_PER_ORB=13
+INCLINATION_DEGREE=99
+simulation_end_time_s=600
+Time_step_ms=100
+isl_data_rate_megabit_per_s=10.0
+gsl_data_rate_megabit_per_s=10.0
+isl_max_queue_size_pkts=100
+gsl_max_queue_size_pkts=100
 
-任务规划：
-完成算法
-对比算法
-数据呈现
+```

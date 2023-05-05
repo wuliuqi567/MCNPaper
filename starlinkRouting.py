@@ -7,6 +7,9 @@ import networkx as nx
 import time
 from gen_satellites_info import gen_info
 from gen_mesh_isl import verifiy_routing
+import matplotlib.pyplot as plt
+import random
+import numpy as np
 
 EARTH_RADIUS = 6378135.0
 ECCENTRICITY = 0.0000001  # Circular orbits are zero, but pyephem does not permit 0, so lowest possible value
@@ -82,13 +85,18 @@ enable_verbose_logs = True
 
 def OGDRoutingTest(satellites, ground_station_satellites_in_range, graphs_sat_net):
 
-    access_sat = calculate_two_gs_routing(satellites, ground_station_satellites_in_range, 0, 1)
+    access_sat = calculate_two_gs_routing_minimize_dis(satellites, ground_station_satellites_in_range, 0, 1)
     minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net, source=access_sat[0], target=access_sat[1])
     return minWPath_vs_vt
 
+def OGDRoutingTest2(satellites, ground_station_satellites_in_range, graphs_sat_net, constellation_type):
+    access_sat = calculate_two_gs_routing_test(satellites, ground_station_satellites_in_range, 0, 1, constellation_type)
+    routing = nx.dijkstra_path(graphs_sat_net, source=access_sat[0], target=access_sat[1])
+    return routing
+
 
 # [[(614842.25, 1521, 1), (683955.5, 1085, 0), (687683.5625, 1064, 0), (693692.875, 1543, 1),
-def OGDRouting(satellites, ground_station_satellites_in_range):
+def OGDRoutingv1(satellites, ground_station_satellites_in_range):
     # divide satellites into two types
     gs_size = len(ground_station_satellites_in_range)
     route = []
@@ -102,6 +110,100 @@ def OGDRouting(satellites, ground_station_satellites_in_range):
             gs2_index -= 1
     return route
 
+def OGDRoutingv2(satellites, ground_station_satellites_in_range):
+    # divide satellites into two types
+    gs_size = len(ground_station_satellites_in_range)
+    access_sat = []
+    for gs1_index in range(0, gs_size):
+        gs2_index = gs_size - 1
+        while gs2_index > gs1_index:
+            access_sat = calculate_two_gs_routing(satellites, ground_station_satellites_in_range, gs1_index, gs2_index)
+            gs2_index -= 1
+    return access_sat
+
+
+
+def calculate_two_gs_routing_minimize_dis(satellites, ground_station_satellites_in_range, src_gs_index, des_gs_index):
+    src_gs_sats_in_range = ground_station_satellites_in_range[src_gs_index]
+    des_gs_sats_in_range = ground_station_satellites_in_range[des_gs_index]
+
+    src_gs_sats_in_range = sorted(src_gs_sats_in_range)
+    des_gs_sats_in_range = sorted(des_gs_sats_in_range)
+    return [src_gs_sats_in_range[0][1], des_gs_sats_in_range[0][1]]
+
+
+def calculate_two_gs_routing_test(satellites, ground_station_satellites_in_range, src_gs_index, des_gs_index, constellation_type):
+    src_gs_sats_in_range = ground_station_satellites_in_range[src_gs_index]
+    des_gs_sats_in_range = ground_station_satellites_in_range[des_gs_index]
+    min_hop_sum = 65535
+    select_src_sat_id = 0
+    select_des_sat_id = 0
+    # dir_hop_horizontal = 0
+    # dir_hop_vertical = 0
+    hop_horizontal_last = 0
+    distance_gsl_src_last = 0
+    distance_gsl_dst_last = 0
+    sel_src_type = 2  # 0 descending 1 ascending  2 error
+    sel_des_type = 2
+
+    if constellation_type == 'kuiper':
+        num_orbit = 34
+        num_sat_of_orbit = 34
+    elif constellation_type == 'starlink':
+        num_orbit = 72
+        num_sat_of_orbit = 22
+    elif constellation_type == 'telesat':
+        num_orbit = 27
+        num_sat_of_orbit = 13
+
+
+    for dis_sat_to_src, src_sat_id, src_type in src_gs_sats_in_range:
+        for dis_sat_to_des, des_sat_id, des_type in des_gs_sats_in_range:
+
+            n_src = src_sat_id // num_sat_of_orbit
+            n_des = des_sat_id // num_sat_of_orbit
+
+            m_src = src_sat_id % num_sat_of_orbit
+            m_des = des_sat_id % num_sat_of_orbit
+
+            hop_horizontal = min(abs(n_src - n_des), num_orbit - abs(n_src - n_des))
+            hop_vertical = min(abs(m_src - m_des), num_sat_of_orbit - abs(m_src - m_des))
+
+            hop_sum = hop_horizontal + hop_vertical
+            # print('src  des  hop', src_sat_id, des_sat_id, hop_sum)
+            if hop_sum < min_hop_sum:
+                min_hop_sum = hop_sum
+                select_src_sat_id = src_sat_id
+                select_des_sat_id = des_sat_id
+                hop_horizontal_last = hop_horizontal
+                distance_gsl_src_last = dis_sat_to_src
+                distance_gsl_dst_last = dis_sat_to_des
+                sel_src_type = src_type
+                sel_des_type = des_type
+
+            elif hop_sum == min_hop_sum:
+                if hop_horizontal > hop_horizontal_last:
+                    min_hop_sum = hop_sum
+                    select_src_sat_id = src_sat_id
+                    select_des_sat_id = des_sat_id
+                    hop_horizontal_last = hop_horizontal
+                    distance_gsl_src_last = dis_sat_to_src
+                    distance_gsl_dst_last = dis_sat_to_des
+                    sel_src_type = src_type
+                    sel_des_type = des_type
+                elif hop_horizontal == hop_horizontal_last:
+                    if distance_gsl_src_last + distance_gsl_dst_last > dis_sat_to_src + dis_sat_to_des:
+                        min_hop_sum = hop_sum
+                        select_src_sat_id = src_sat_id
+                        select_des_sat_id = des_sat_id
+                        hop_horizontal_last = hop_horizontal
+                        distance_gsl_src_last = dis_sat_to_src
+                        distance_gsl_dst_last = dis_sat_to_des
+                        sel_src_type = src_type
+                        sel_des_type = des_type
+
+    return [select_src_sat_id, select_des_sat_id]
+
 
 def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src_gs_index, des_gs_index):
     src_gs_sats_in_range = ground_station_satellites_in_range[src_gs_index]
@@ -112,6 +214,8 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     # dir_hop_horizontal = 0
     # dir_hop_vertical = 0
     hop_horizontal_last = 0
+    distance_gsl_src_last = 0
+    distance_gsl_dst_last = 0
     sel_src_type = 2  # 0 descending 1 ascending  2 error
     sel_des_type = 2
 
@@ -134,6 +238,8 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
                 select_src_sat_id = src_sat_id
                 select_des_sat_id = des_sat_id
                 hop_horizontal_last = hop_horizontal
+                distance_gsl_src_last = dis_sat_to_src
+                distance_gsl_dst_last = dis_sat_to_des
                 sel_src_type = src_type
                 sel_des_type = des_type
 
@@ -143,11 +249,22 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
                     select_src_sat_id = src_sat_id
                     select_des_sat_id = des_sat_id
                     hop_horizontal_last = hop_horizontal
+                    distance_gsl_src_last = dis_sat_to_src
+                    distance_gsl_dst_last = dis_sat_to_des
                     sel_src_type = src_type
                     sel_des_type = des_type
+                elif hop_horizontal == hop_horizontal_last:
+                    if distance_gsl_src_last + distance_gsl_dst_last > dis_sat_to_src + dis_sat_to_des:
+                        min_hop_sum = hop_sum
+                        select_src_sat_id = src_sat_id
+                        select_des_sat_id = des_sat_id
+                        hop_horizontal_last = hop_horizontal
+                        distance_gsl_src_last = dis_sat_to_src
+                        distance_gsl_dst_last = dis_sat_to_des
+                        sel_src_type = src_type
+                        sel_des_type = des_type
 
-    return [select_src_sat_id, select_des_sat_id]
-
+    return [select_src_sat_id, select_des_sat_id, sel_src_type, sel_des_type]
     # print('select_src_sat_id  select_des_sat_id hop', select_src_sat_id, select_des_sat_id, min_hop_sum)
     # if sel_src_type == sel_des_type:
     #     # return orbit_gird_routing_sametype(satellites, select_src_sat_id, select_des_sat_id)
@@ -156,7 +273,7 @@ def calculate_two_gs_routing(satellites, ground_station_satellites_in_range, src
     #     return OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id)
 
 
-def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
+def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id, mesh_net):
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
 
@@ -195,32 +312,32 @@ def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
 
         if reward_s > reward_d:
 
-            if LinkConnected(curr_node_src, next_node_src):  # 向前正常
+            if LinkConnected(curr_node_src, next_node_src, mesh_net):  # 向前正常
                 route_from_s.append(next_node_src)
             else:  # 向前链路异常
                 next_node_m_src = Get_M_of_plane(curr_node_src % 22, dir_hop_vertical, "+")  # 向上查找
                 next_node_src = (curr_node_src // 22) * 22 + next_node_m_src
-                if LinkConnected(curr_node_src, next_node_src):  # 向上链路正常
+                if LinkConnected(curr_node_src, next_node_src, mesh_net):  # 向上链路正常
                     route_from_s.append(next_node_src)
                 else:  # 向上链路异常 回退
-                    route_from_s = HorizontalBacktrackingForA2A(route_from_s, '+', dir_hop_vertical)  # 无路可退返回空list
+                    route_from_s = HorizontalBacktrackingForA2A(route_from_s, '+', dir_hop_vertical, mesh_net)  # 无路可退返回空list
         else:
-            if LinkConnected(curr_node_des, next_node_des):
+            if LinkConnected(curr_node_des, next_node_des, mesh_net):
                 route_from_d.append(next_node_des)
             else:  # 向后链路异常
                 next_node_m_des = Get_M_of_plane(curr_node_des % 22, dir_hop_vertical, '-')
                 next_node_des = (curr_node_des // 22) * 22 + next_node_m_des
-                if LinkConnected(curr_node_des, next_node_des):  # 向下的链路正常
+                if LinkConnected(curr_node_des, next_node_des, mesh_net):  # 向下的链路正常
                     route_from_d.append(next_node_des)
                 else:  # 向下的链路异常 回退
-                    route_from_d = HorizontalBacktrackingForA2A(route_from_d, '-', dir_hop_vertical)  # 无路可退返回空list
+                    route_from_d = HorizontalBacktrackingForA2A(route_from_d, '-', dir_hop_vertical, mesh_net)  # 无路可退返回空list
 
     if len(route_from_s) < 1 or len(route_from_d) < 1:
         return []
     elif route_from_s[-1] // 22 != route_from_d[-1] // 22:
         return []
 
-    nodes = VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical)
+    nodes = VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical, mesh_net)
     if len(nodes) < 1:  # 链路故障 返回空为链路故障
         nodes, route_from_s, route_from_d = VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal,
                                                                  dir_hop_vertical)
@@ -235,7 +352,7 @@ def OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id):
     return route_from_s + route_from_d
 
 
-def HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical):
+def HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical, mesh_net):
     """
     向前向上链路故障时候进入，用于链路回退/回溯
     解释说明：
@@ -261,7 +378,7 @@ def HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical):
     if temp_node % 22 == curr_node % 22:  # 横向退 m = m
         next_node_m_src = Get_M_of_plane(curr_node % 22, dir_hop_vertical, type_from_s_or_d)  # if s '+' else '-'
         next_node_src = (curr_node // 22) * 22 + next_node_m_src
-        if LinkConnected(curr_node, next_node_src):  # 向上检查
+        if LinkConnected(curr_node, next_node_src, mesh_net):  # 向上检查
             route.append(next_node_src)
         else:  # 链路不存在 再次回退
             route = HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical)
@@ -271,7 +388,7 @@ def HorizontalBacktrackingForA2A(route, type_from_s_or_d, dir_hop_vertical):
     return route
 
 
-def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical):
+def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical, mesh_net):
     """
     在左右范围内上下寻找，
     - - - - - - - - - 6 d
@@ -305,7 +422,7 @@ def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop
         next_node_src = next_n_src * 22 + Rs_src[-1] % 22
 
         if flag_1 and len(Rd_src) > 1 and Rd_src[-1] % 22 == Rd_src[-2] % 22 and LinkConnected(Rs_src[-1],
-                                                                                               next_node_src):  # 向前链路正常
+                                                                                               next_node_src, mesh_net):  # 向前链路正常
             Rd_src.pop()
             Rs_src.append(next_node_src)
             nodes = VerticalLinksCheckForA2A(Rs_src, Rd_src, dir_hop_vertical)
@@ -320,7 +437,7 @@ def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop
         next_node_des = next_n_des * 22 + Rd_des[-1] % 22
 
         if flag_2 and len(Rs_des) > 1 and Rs_des[-1] % 22 == Rs_des[-2] % 22 and LinkConnected(Rd_des[-1],
-                                                                                               next_node_des):  # 向后链路正常
+                                                                                               next_node_des, mesh_net):  # 向后链路正常
             Rs_des.pop()
             Rd_des.append(next_node_des)
             nodes = VerticalLinksCheckForA2A(Rs_des, Rd_des, dir_hop_vertical)
@@ -334,7 +451,7 @@ def VerticalSearchForA2A(route_from_s, route_from_d, dir_hop_horizontal, dir_hop
     return nodes, new_route_from_s, new_route_from_d
 
 
-def VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical):
+def VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical, mesh_net):
     """
     垂直链路检查
     如果 链路正常 返回包括上下节点的路径，
@@ -356,7 +473,7 @@ def VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical):
     while curr_node != dest_node:
         next_node_m_src = Get_M_of_plane(curr_node % 22, dir_hop_vertical, '+')
         next_node = (curr_node // 22) * 22 + next_node_m_src
-        if LinkConnected(curr_node, next_node):
+        if LinkConnected(curr_node, next_node, mesh_net):
             nodes.append(next_node)
             curr_node = next_node
         else:
@@ -364,7 +481,7 @@ def VerticalLinksCheckForA2A(route_from_s, route_from_d, dir_hop_vertical):
     return nodes
 
 
-def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
+def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id, mesh_net):
     route_from_s = [select_src_sat_id]
     route_from_d = [select_des_sat_id]
 
@@ -402,35 +519,39 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
         reward_d = abs(satellites[curr_node_des].sublat) + abs(satellites[next_node_des].sublat)
 
         if reward_s < reward_d:
-            if LinkConnected(curr_node_src, next_node_src):  # 向上链路正常
+            if LinkConnected(curr_node_src, next_node_src, mesh_net):  # 向上链路正常
                 route_from_s.append(next_node_src)
             else:  # 向上链路异常
                 next_node_n_src = Get_N_of_plane(curr_node_src // 22, dir_hop_horizontal, "+")  # 向左节点
                 next_node_src = next_node_n_src * 22 + curr_node_src % 22
-                if LinkConnected(curr_node_src, next_node_src):  # 向左链路正常
+                if LinkConnected(curr_node_src, next_node_src, mesh_net):  # 向左链路正常
                     route_from_s.append(next_node_src)
                 else:  # 向左链路异常 回退
-                    route_from_s = VerticalBacktrackingForForA2D(route_from_s, '+', dir_hop_horizontal)  # 无路可退返回空list
+                    route_from_s = VerticalBacktrackingForForA2D(route_from_s, '+', dir_hop_horizontal, mesh_net)  # 无路可退返回空list
         else:
-            if LinkConnected(curr_node_des, next_node_des):  # 正常
+            if LinkConnected(curr_node_des, next_node_des, mesh_net):  # 正常
                 route_from_d.append(next_node_des)
             else:  # 向下链路异常
                 next_node_n_des = Get_N_of_plane(curr_node_des // 22, dir_hop_horizontal, '-')
                 next_node_des = next_node_n_des * 22 + curr_node_des % 22
-                if LinkConnected(curr_node_des, next_node_des):  # 向右链路正常
+                if LinkConnected(curr_node_des, next_node_des, mesh_net):  # 向右链路正常
                     route_from_d.append(next_node_des)
                 else:  # 向右链路异常
-                    route_from_d = VerticalBacktrackingForForA2D(route_from_d, '-', dir_hop_horizontal)  # 无路可退返回空list
+                    route_from_d = VerticalBacktrackingForForA2D(route_from_d, '-', dir_hop_horizontal, mesh_net)  # 无路可退返回空list
+
+    print("rs: ", str(route_from_s), 'rd: ', str(route_from_d))
+
+    assert route_from_s[-1] % 22 == route_from_d[-1] % 22
 
     if len(route_from_s) < 1 or len(route_from_d) < 1:
         return []
     elif route_from_s[-1] % 22 != route_from_d[-1] % 22:
         return []
 
-    nodes = HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal)
+    nodes = HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal, mesh_net)
     if len(nodes) < 1:  # 链路故障， 链路故障 返回空为链路故障
         nodes, route_from_s, route_from_d = HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal,
-                                                                   dir_hop_vertical)
+                                                                   dir_hop_vertical, mesh_net)
         if len(route_from_s) > 0:  # 找到了路
             route_from_s += nodes[1:-1]
         else:
@@ -438,11 +559,12 @@ def OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id):
     else:  # 链路正常，路由计算完毕
         route_from_s += nodes[1:-1]
 
+    print("rs: ", str(route_from_s), 'rd: ', str(route_from_d))
     route_from_d.reverse()
     return route_from_s + route_from_d
 
 
-def VerticalBacktrackingForForA2D(route, type_from_s_or_d, dir_hop_horizontal):  # 无路可退返回空list:
+def VerticalBacktrackingForForA2D(route, type_from_s_or_d, dir_hop_horizontal, mesh_net):  # 无路可退返回空list:
     """
     向上向左链路故障时候进入，用于链路回退/回溯
     解释说明：
@@ -469,7 +591,7 @@ def VerticalBacktrackingForForA2D(route, type_from_s_or_d, dir_hop_horizontal): 
         # 计算向左的节点编号
         next_node_n = Get_N_of_plane(curr_node // 22, dir_hop_horizontal, type_from_s_or_d)
         next_node = next_node_n * 22 + curr_node % 22
-        if LinkConnected(curr_node, next_node):  # 向左正常
+        if LinkConnected(curr_node, next_node, mesh_net):  # 向左正常
             route.append(next_node)
         else:  # 向左异常
             route = VerticalBacktrackingForForA2D(route, type_from_s_or_d, dir_hop_horizontal)
@@ -479,7 +601,7 @@ def VerticalBacktrackingForForA2D(route, type_from_s_or_d, dir_hop_horizontal): 
     return route
 
 
-def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical):
+def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_hop_vertical, mesh_net):
     """
     在上下范围内左右寻找，
     - - - - - - - 1 d
@@ -512,10 +634,10 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
         next_m_up = Get_M_of_plane(Rs_up[-1] % 22, dir_hop_vertical, '+')
         next_node_up = (Rs_up[-1] // 22) * 22 + next_m_up
 
-        if flag_up and len(Rd_up) > 1 and Rd_up[-1] // 22 == Rd_up[-2] // 22 and LinkConnected(Rs_up[-1], next_node_up):
+        if flag_up and len(Rd_up) > 1 and Rd_up[-1] // 22 == Rd_up[-2] // 22 and LinkConnected(Rs_up[-1], next_node_up, mesh_net):
             Rd_up.pop()
             Rs_up.append(next_node_up)
-            nodes = HorizontalLinkCheckForA2D(Rs_up, Rd_up, dir_hop_horizontal)
+            nodes = HorizontalLinkCheckForA2D(Rs_up, Rd_up, dir_hop_horizontal, mesh_net)
             if len(nodes):  # 水平链路正常
                 new_route_from_s = Rs_up
                 new_route_from_d = Rs_down
@@ -525,11 +647,11 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
 
         next_m_down = Get_M_of_plane(Rd_down[-1] % 22, dir_hop_vertical, '-')
         next_node_down = (Rd_down[-1] // 22) * 22 + next_m_down
-        if flag_down and len(Rs_down) > 1 and Rs_down[-1] // 22 == Rs_down[-2] // 22 and LinkConnected(Rd_down,
-                                                                                                       next_node_down):
+        if flag_down and len(Rs_down) > 1 and Rs_down[-1] // 22 == Rs_down[-2] // 22 and LinkConnected(Rd_down[-1],
+                                                                                                       next_node_down, mesh_net):
             Rs_down.pop()
             Rd_down.append(next_node_down)
-            nodes = HorizontalLinkCheckForA2D(Rs_down, Rd_down, dir_hop_horizontal)
+            nodes = HorizontalLinkCheckForA2D(Rs_down, Rd_down, dir_hop_horizontal, mesh_net)
             if len(nodes):  # 水平链路正常
                 new_route_from_s = Rs_down
                 new_route_from_d = Rd_down
@@ -540,7 +662,7 @@ def HorizontalSearchForA2D(route_from_s, route_from_d, dir_hop_horizontal, dir_h
     return nodes, new_route_from_s, new_route_from_d
 
 
-def HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal):
+def HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal, mesh_net):
     """
     水平链路检查
     如果 链路正常 返回包括左右节点的路径，
@@ -559,7 +681,7 @@ def HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal):
     while curr_node != dest_node:
         next_node_n_src = Get_N_of_plane(curr_node // 22, dir_hop_horizontal, '+')
         next_node = next_node_n_src * 22 + curr_node % 22
-        if LinkConnected(curr_node, next_node):
+        if LinkConnected(curr_node, next_node, mesh_net):
             nodes.append(next_node)
             curr_node = next_node
         else:
@@ -567,9 +689,9 @@ def HorizontalLinkCheckForA2D(route_from_s, route_from_d, dir_hop_horizontal):
     return nodes
 
 
-def LinkConnected(start_node, end_node) -> int:  # 链路连通
+def LinkConnected(start_node, end_node, mesh_net) -> int:  # 链路连通
+    return mesh_net.has_edge(start_node, end_node)
 
-    return True
 
 
 def Get_N_of_plane(n_orbit, dir, ch):
@@ -1104,7 +1226,331 @@ def get_positive_int(ne_or_po_num: int):
     return ne_or_po_num
 
 
-def main():
+def osr(starlink_network, one_path, rank):
+
+    service_weight = [[0.4, 0.5, 0.1],
+                      [0.65, 0.15, 0.2],
+                      [0.25, 0.45, 0.3]]
+    path_list = []
+    for i in range(len(one_path)-1):
+        path_list.append(sorted([one_path[i], one_path[i+1]]))
+
+    # print(one_path)
+    # print(path_list)
+
+    delay = []
+    band = []
+    plr = []
+    all_delay = nx.get_edge_attributes(starlink_network, "weight")
+    all_band = nx.get_edge_attributes(starlink_network, "band")
+    all_plr = nx.get_edge_attributes(starlink_network, "plr")
+
+    for i in range(len(path_list)):
+        # aa = all_delay.get(tuple(path_list[i]))
+        if all_delay.get(tuple(path_list[i])):
+            delay.append(all_delay[tuple(path_list[i])])
+            band.append(all_band[tuple(path_list[i])])
+            plr.append(all_plr[tuple(path_list[i])])
+        else:
+            # print('hh')
+            link = path_list[i]
+            link.reverse()
+            delay.append(all_delay[tuple(link)])
+            band.append(all_band[tuple(link)])
+            plr.append(all_plr[tuple(link)])
+
+    # normal
+    min_d = min(delay)
+    min_b = min(band)
+    min_p = min(plr)
+
+    max_d = max(delay)
+    max_b = max(band)
+    max_p = max(plr)
+
+    qd = round(max(delay) / sum(delay), 6)
+    qb = round(min(band) / sum(band), 6)
+    qp = round(max(plr) / sum(plr), 6)
+
+    for i in range(len(delay)):
+        delay[i] = round((delay[i] - min_d) / (max_d - min_d), 6)
+        band[i] = round((band[i] - min_b) / (max_b - min_b), 6)
+        # print(max_p, min_p)
+        plr[i] = round((plr[i] - min_p) / (max_p - min_p), 6)
+
+    # min_b = min(band)
+    # max_d = max(delay)
+    # max_p = max(plr)
+
+    u = service_weight[rank][0] * qb * sum(band) - service_weight[rank][1] * qd * sum(delay) - service_weight[rank][2] * qp * sum(plr)
+    return u
+
+
+def QSRout(starlink_network, paths):
+    max_u = -1000000
+    print('path num;, ', len(paths))
+    path_max_u1 = []
+    for path in paths:
+        u = osr(starlink_network, path, 0)
+        # print(u)
+        if u > max_u:
+            max_u = u
+            path_max_u1 = path
+    return path_max_u1
+
+def get_mesh_net(sat_src, sat_des):
+    n_orbits = 72
+    n_sats_per_orbit = 22
+
+    sat_two_final_selected = []
+    sat_two_final_selected.append([sat_src // n_sats_per_orbit, sat_src % n_sats_per_orbit])
+    sat_two_final_selected.append([sat_des // n_sats_per_orbit, sat_des % n_sats_per_orbit])
+
+
+    sat_connect2gs0_id = sat_two_final_selected[0]
+    sat_connect2gs1_id = sat_two_final_selected[1]
+    # three situation to specifly direction
+    flag = 0
+    if sat_connect2gs0_id[0] == sat_connect2gs1_id[0]:
+        flag = 1
+    elif sat_connect2gs0_id[1] == sat_connect2gs1_id[1]:
+        flag = 2
+
+    # bulid mesh network
+    orbit_begin = sat_connect2gs0_id[0]
+    orbit_end = sat_connect2gs1_id[0]
+
+    if flag != 2:
+        if orbit_begin < orbit_end:
+            orbit_begin = (orbit_begin - 1) % n_orbits
+            orbit_end = (orbit_end + 1) % n_orbits
+        elif orbit_begin > orbit_end:
+            orbit_end = (orbit_end - 1) % n_orbits
+            orbit_begin = (orbit_begin + 1) % n_orbits
+            orbit_begin, orbit_end = orbit_end, orbit_begin
+        else:
+            orbit_begin = (orbit_begin - 1) % n_orbits
+            orbit_end = (orbit_end + 1) % n_orbits
+    else:
+        orbit_begin = min(sat_connect2gs0_id[0], sat_connect2gs1_id[0])
+        orbit_end = max(sat_connect2gs0_id[0], sat_connect2gs1_id[0])
+
+    n_sat_of_plane_begin = sat_connect2gs0_id[1]
+    n_sat_of_plane_end = sat_connect2gs1_id[1]
+
+    if flag != 1:
+        if n_sat_of_plane_begin < n_sat_of_plane_end:
+            n_sat_of_plane_begin = (n_sat_of_plane_begin - 1) % n_sats_per_orbit
+            n_sat_of_plane_end = (n_sat_of_plane_end + 1) % n_sats_per_orbit
+        elif n_sat_of_plane_begin > n_sat_of_plane_end:
+            n_sat_of_plane_begin = (n_sat_of_plane_begin + 1) % n_sats_per_orbit
+            n_sat_of_plane_end = (n_sat_of_plane_end - 1) % n_sats_per_orbit
+            n_sat_of_plane_begin, n_sat_of_plane_end = n_sat_of_plane_end, n_sat_of_plane_begin
+        else:
+            n_sat_of_plane_begin = (n_sat_of_plane_begin - 1) % n_sats_per_orbit
+            n_sat_of_plane_end = (n_sat_of_plane_end + 1) % n_sats_per_orbit
+    else:
+        n_sat_of_plane_begin = min(sat_connect2gs0_id[1], sat_connect2gs1_id[1])
+        n_sat_of_plane_end = max(sat_connect2gs0_id[1], sat_connect2gs1_id[1])
+
+    orbits_list = [orbit_begin]
+    n_sat_plane_list = [n_sat_of_plane_begin]
+
+    temp_orbit = ((orbit_begin + 1) % n_orbits)
+    while (temp_orbit != orbit_end):
+        orbits_list.append(temp_orbit)
+        temp_orbit = ((temp_orbit + 1) % n_orbits)
+    orbits_list.append(orbit_end)
+
+    temp_sat_num = (n_sat_of_plane_begin + 1) % n_sats_per_orbit
+    while (temp_sat_num != n_sat_of_plane_end):
+        n_sat_plane_list.append(temp_sat_num)
+        temp_sat_num = ((temp_sat_num + 1) % n_sats_per_orbit)
+    n_sat_plane_list.append(n_sat_of_plane_end)
+
+    # mesh_net = nx.Graph()
+    sats_in_mesh_list = []
+    for x in orbits_list:
+        for y in n_sat_plane_list:
+            sat_id = (x * n_sats_per_orbit + y)
+            # mesh_net.add_node(sat_id, pos=(x, y))
+            sats_in_mesh_list.append(sat_id)
+    net_info = {
+        "orbits_list": orbits_list,
+        "n_sat_plane_list": n_sat_plane_list,
+        "sats_in_mesh_list": sats_in_mesh_list
+    }
+
+    return net_info
+
+
+def local_grid_net(isl_list, sat_src, sat_des, satellites, epoch):
+
+    net_info = get_mesh_net(sat_src, sat_des)
+
+    # add isl according to isl.txt
+    mesh_net = nx.Graph()
+    mesh_net.add_nodes_from(net_info['sats_in_mesh_list'])
+
+
+
+    for (a, b) in isl_list:
+        if a in net_info['sats_in_mesh_list'] and b in net_info['sats_in_mesh_list']:
+            dist = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(epoch))
+            delay = round((dist / 3e8) * 1000, 2)
+            mesh_net.add_edge(a, b, weight=delay, band=np.random.randint(100, 110), plr=round(0.0015 + 0.0005*np.random.rand(), 8))
+
+    return mesh_net
+
+
+def satviz_net(mesh_net, sat_src, sat_des, routing):
+
+    net_info = get_mesh_net(sat_src, sat_des)
+    pos = nx.random_layout(mesh_net)
+    nodes_id = list(mesh_net.nodes)
+
+    node_id = 0
+    for x in range(len(net_info['orbits_list'])):
+        for y in range(len(net_info['n_sat_plane_list'])):
+            pos[nodes_id[node_id]][0] = x
+            pos[nodes_id[node_id]][1] = -y
+            node_id += 1
+
+    nx.draw(mesh_net, pos, with_labels=True, font_size=10)
+
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='pink', nodelist=routing)
+
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='red', nodelist=[sat_src])
+    nx.draw_networkx_nodes(mesh_net, pos, node_color='green', nodelist=[sat_des])
+
+    # node_labels = nx.get_node_attributes(mesh_net, name='pos')
+    # nx.draw_networkx_labels(mesh_net, pos, font_size=10, labels=node_labels)
+    # edge_labels = nx.get_edge_attributes(mesh_net, 'weight')
+    # nx.draw_networkx_edge_labels(mesh_net, pos, font_size=8, edge_labels=edge_labels)
+
+    plt.show()
+
+
+
+def maintestFailure():
+    print('init customized topology')
+    sat_info = read_tles(gen_data)
+    ground_stations = read_ground_stations_extended(gen_data)
+    satellites = sat_info['satellites']
+    epoch = sat_info['epoch']
+    init_time = epoch + 0 * u.day
+    # graph Information
+    for i in range(len(satellites)):
+        graphs_sat_net_graph_only_satellites_with_isls.add_node(i)
+    for i in range(len(satellites) + len(ground_stations)):
+        graphs_sat_net_graph_all_with_only_gsls.add_node(i)
+
+    isl_list = read_isls(gen_data, sat_info['num_of_all_satellite'])
+
+    for (a, b) in isl_list:
+        sat_distance_m = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(init_time))
+        delay = round(sat_distance_m / light_speed, 4) * 1000
+        graphs_sat_net_graph_only_satellites_with_isls.add_edge(a, b, weight=delay)
+        graphs_sat_net_graph_all_with_only_gsls.add_edge(a, b, weight=delay, band=2000, plr=0.006)
+
+    ground_station_satellites_in_range = []
+
+    for ground_station in ground_stations:
+        # Find satellites in range
+        satellites_in_range = []
+        for sid in range(len(satellites)):
+            distance_m = distance_m_ground_station_to_satellite(
+                ground_station,
+                satellites[sid],
+                str(epoch),
+                str(epoch)
+            )
+            # sat_type = ascending_or_descending_of_satellite(satellites[sid], str(each_time))
+            # print('type', sat_type)
+            if distance_m <= MAX_GSL_LENGTH_M:
+                satellites_in_range.append(
+                    (distance_m, sid, ascending_or_descending_of_satellite(satellites[sid], str(epoch))))
+                # graph info
+                delay = round(distance_m / light_speed, 4) * 1000
+                # print("\ngs2sat---->  ", delay)
+                graphs_sat_net_graph_all_with_only_gsls.add_edge(sid, len(satellites) + ground_station["gid"],
+                                                                 weight=delay, band=1090, plr=0.008)
+        satellites_in_range = sorted(satellites_in_range)
+        ground_station_satellites_in_range.append(satellites_in_range)
+
+    access_sat = OGDRoutingv2(satellites, ground_station_satellites_in_range)
+    orbit_grid_net = local_grid_net(isl_list, access_sat[0], access_sat[1], satellites, epoch)
+
+    select_src_sat_id = access_sat[0]
+    select_des_sat_id = access_sat[1]
+    sel_src_type = access_sat[2]
+    sel_des_type = access_sat[3]
+
+    # 随机断掉一些链路 sat_id0:  926 sat_id1:  948
+    link_all_num = len(orbit_grid_net.edges)
+    edgers = list(orbit_grid_net.edges)
+    sats_id = list(orbit_grid_net.nodes)
+
+    print("begin calculate routing OGDR")
+    file_route_OGD = open("./output/OGDRouteFailure.txt", 'w+')
+    file_route_SPF = open("./output/SPFRouteFailure.txt", 'w+')
+    file_route_QSP = open("./output/QSPRouteFailure.txt", 'w+')
+
+    for i in range(10):
+        random_integers = random.sample(range(0, link_all_num), link_all_num//10)
+
+        new_orbit_grid_net = local_grid_net(isl_list, access_sat[0], access_sat[1], satellites, epoch)
+
+        for each_edge_id in random_integers:
+            if edgers[each_edge_id][0] in sats_id and edgers[each_edge_id][1] in sats_id:
+                # print('sat_id0: ', edgers[each_edge_id][0], 'sat_id1: ', edgers[each_edge_id][1])
+                new_orbit_grid_net.remove_edge(*edgers[each_edge_id])
+            else:
+                print(edgers[each_edge_id][0], edgers[each_edge_id][1])
+
+        print("# Calculate OGDR ")
+        OGDRouting = []
+        if sel_src_type == sel_des_type:
+            OGDRouting = OGDRouting_A2A(satellites, select_src_sat_id, select_des_sat_id, new_orbit_grid_net)
+        else:
+            OGDRouting = OGDRouting_A2D(satellites, select_src_sat_id, select_des_sat_id, new_orbit_grid_net)
+        print(OGDRouting)
+        if len(OGDRouting) > 0:
+            file_route_OGD.write(str(len(OGDRouting) + 1))
+            file_route_OGD.write('\n')
+        else:
+            file_route_OGD.write(str(0))
+            file_route_OGD.write('\n')
+
+        satviz_net(new_orbit_grid_net, select_src_sat_id, select_des_sat_id, OGDRouting)
+
+        # print("# Calculate shortest path ")
+        # minWPath_vs_vt = []
+        # minWPath_vs_vt = nx.dijkstra_path(new_orbit_grid_net, source=select_src_sat_id, target=select_des_sat_id)
+        # file_route_SPF.write(str(len(minWPath_vs_vt) + 1))
+        # file_route_SPF.write('\n')
+        #
+        # print("# Calculate QSR path ")
+        # QSPRouting = []
+        # maxLengthPath = len(minWPath_vs_vt)
+        # # 而cutoff参数设置的截断长度不包括源结点。
+        # paths = nx.all_simple_paths(new_orbit_grid_net, select_src_sat_id, select_des_sat_id, cutoff=maxLengthPath-1)
+        # paths = list(paths)
+        # QSPRouting = QSRout(new_orbit_grid_net, paths)
+        # file_route_QSP.write(str(len(QSPRouting) + 1))
+        # file_route_QSP.write('\n')
+
+
+
+    file_route_OGD.close()
+    file_route_SPF.close()
+    file_route_QSP.close()
+
+
+
+
+
+def maintest2():
     print('init customized topology')
     sat_info = read_tles(gen_data)
     # print('\n>gen_data', sat_info)
@@ -1129,24 +1575,18 @@ def main():
 
     for (a, b) in isl_list:
         sat_distance_m = distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(init_time))
-        # if sat_distance_m > MAX_ISL_LENGTH_M:
-        #     raise ValueError(
-        #         "The distance between two satellites (%d and %d) "
-        #         "with an ISL exceeded the maximum ISL length (%.2fm > %.2fm at t=%dns)"
-        #         % (a, b, sat_distance_m, MAX_ISL_LENGTH_M, time)
-        #     )
-
         delay = round(sat_distance_m / light_speed, 4) * 1000
         graphs_sat_net_graph_only_satellites_with_isls.add_edge(a, b, weight=delay)
-        graphs_sat_net_graph_all_with_only_gsls.add_edge(a, b, weight=delay)
+        graphs_sat_net_graph_all_with_only_gsls.add_edge(a, b, weight=delay, band=2000, plr=0.006)
 
-    if enable_verbose_logs:
+    if not enable_verbose_logs:
         print("  > Total ISLs............. " + str(len(isl_list)))
 
-    if enable_verbose_logs:
+    if not enable_verbose_logs:
         print("\n  > Epoch.................. " + str(epoch))
 
     ground_station_satellites_in_range = []
+
     for ground_station in ground_stations:
         # Find satellites in range
         satellites_in_range = []
@@ -1166,60 +1606,114 @@ def main():
                 delay = round(distance_m / light_speed, 4) * 1000
                 # print("\ngs2sat---->  ", delay)
                 graphs_sat_net_graph_all_with_only_gsls.add_edge(sid, len(satellites) + ground_station["gid"],
-                                                                 weight=delay)
+                                                                 weight=delay, band=1090, plr=0.008)
         satellites_in_range = sorted(satellites_in_range)
         ground_station_satellites_in_range.append(satellites_in_range)
 
     if enable_verbose_logs:
         print(" \n> ground_station_satellites_in_range ")
-        print(ground_station_satellites_in_range)
+        print("ground_station: ", len(ground_stations))
+        # print(ground_station_satellites_in_range)
 
     routing = []
+    print("begin calculate routing OGDR")
+    file_route = open("./output/OGDRouteRunTime.txt", 'w+')
+    OGDRouting_time = []
     if enable_verbose_logs:
-        OGDRouting_time = []
-        for i in range(0, 1):
+        for i in range(0, 100):
             start_time = time.perf_counter()
-            routing = OGDRouting(satellites, ground_station_satellites_in_range)
+            routing = OGDRoutingv1(satellites, ground_station_satellites_in_range)
             # print('\nOGDRoute', routing)
             end_time = time.perf_counter()
             time_sum = end_time - start_time
             OGDRouting_time.append(time_sum)
         print('\nOGDRouting_time', OGDRouting_time)
+    ave_OGD = sum(OGDRouting_time)/(len(OGDRouting_time))
 
-    verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
+    for r in OGDRouting_time:
+        file_route.write(str(r))
+        file_route.write('\n')
+    file_route.close()
 
-    # Calculate shortest path distances
-    minWPath_vs_vt = []
+    # verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
+
+    print("# Calculate shortest path distances")
+    file_route = open("./output/SPFRouteRunTime.txt", 'w+')
+
+    cal_time = []
     if enable_verbose_logs:
         # print("  > Calculating Floyd-Warshall for graph without ground-station relays")
         # minWPath_vs_vt = nx.dijkstra_path(self.graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
         # # minWPath_vs_vt_len = nx.dijkstra_path_length(mesh_net, source=source_id, target=dest_id)
         # print("\nminWPath_vs_vt", minWPath_vs_vt)
 
-        cal_time = []
-        for i in range(0, 1):
+        # gs_size = len(ground_stations)
+        # cal_time = []
+        # for i in range(0, 100):
+        #     start_time = time.perf_counter()
+        #     # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
+        #     # dist_sat_net_without_gs = nx.floyd_warshall_numpy(graphs_sat_net_graph_all_with_only_gsls)
+        #     # minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
+        #     # print('\nminWPath_vs_vt', minWPath_vs_vt)
+        #     predecessors, _ = nx.floyd_warshall_predecessor_and_distance(graphs_sat_net_graph_all_with_only_gsls)
+        #
+        #     # pred = nx.reconstruct_path(0, 4, predecessors)
+        #     for gs1 in range(gs_size):
+        #         gs2 = gs_size - 1
+        #         gs1_index = gs1 + len(satellites)
+        #         gs2_index = gs2 + len(satellites)
+        #         while gs2_index > gs1_index:
+        #             # minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=gs1_index,
+        #             #                                   target=gs2_index)
+        #             minWPath_vs_vt = nx.reconstruct_path(gs1_index, gs2_index, predecessors)
+        #             minWPath_vs_vt_all.append(minWPath_vs_vt)
+
+        for i in range(0, 1000):
             start_time = time.perf_counter()
-            # # (Note: Numpy has a deprecation warning here because of how networkx uses matrices)
-            # dist_sat_net_without_gs = nx.floyd_warshall_numpy(self.graphs_sat_net_graph_all_with_only_gsls)
-            minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=1584,
-                                              target=1585)
-            # print('\nminWPath_vs_vt', minWPath_vs_vt)
+            minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
             end_time = time.perf_counter()
+
             time_sum = end_time - start_time
             cal_time.append(time_sum)
         print("cal_time", cal_time)
-    verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
-
-    # ground_fstate_dict = calculate_fstate_shortest_path_without_gs_relaying(
-    # satellites,
-    # ground_stations,
-    # dist_sat_net_without_gs,
-    # ground_station_satellites_in_range,
-    # enable_verbose_logs = False)
-    # print(ground_fstate_dict)
+    ave_SPF = sum(cal_time) / (len(cal_time))
+    for r in cal_time:
+        file_route.write(str(r))
+        file_route.write('\n')
+    file_route.close()
 
 
-def mainTest():
+
+    # verifiy_routing(isl_list, minWPath_vs_vt[1], minWPath_vs_vt[-2], sat_info, minWPath_vs_vt[1:-1])
+    print("# Calculate QSR path distances")
+    file_route = open("./output/QSRRouteRunTime.txt", 'w+')
+
+    minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_graph_all_with_only_gsls, source=1584, target=1585)
+    maxLengthPath = len(minWPath_vs_vt)
+    cal_time_QSR = []
+    if enable_verbose_logs:
+        for i in range(0, 100):
+            start_time = time.perf_counter()
+            # 而cutoff参数设置的截断长度不包括源结点。
+            paths = nx.all_simple_paths(graphs_sat_net_graph_all_with_only_gsls, 1584, 1585,
+                                           cutoff=maxLengthPath-1)
+            paths = list(paths)
+            QSRout(graphs_sat_net_graph_all_with_only_gsls, paths)
+            end_time = time.perf_counter()
+            time_sum = end_time - start_time
+
+            file_route.write(str(time_sum))
+            file_route.write('\n')
+            cal_time_QSR.append(time_sum)
+        print("cal_time", cal_time_QSR)
+    ave_QSR = sum(cal_time_QSR) / (len(cal_time_QSR))
+    # for r in cal_time_QSR:
+    #     file_route.write(str(r))
+    #     file_route.write('\n')
+    file_route.close()
+    print(ave_OGD, ave_SPF, ave_QSR)
+
+def mainTest(routeType, name):
     print('init customized topology')
     sat_info = read_tles(gen_data)
     # print('\n>gen_data', sat_info)
@@ -1232,6 +1726,7 @@ def mainTest():
     # }
     ground_stations = read_ground_stations_extended(gen_data)  # starlink/starlink_info/ground_stations.txt
     satellites = sat_info['satellites']
+    number_of_sat = len(satellites)
     epoch = sat_info['epoch']
     init_time = epoch + 0 * u.day
 
@@ -1242,10 +1737,34 @@ def mainTest():
 
     isl_list = read_isls(gen_data, sat_info['num_of_all_satellite'])
 
+    if routeType == 'OGD':
+        file_path_Route = "./output/" + name + "OGDRoute.txt"
+        file_path_RouteDelay = "./output/" + name + "OGDRouteDelay.txt"
+    elif routeType == 'NS':
+        file_path_Route = "./output/" + name + "NSRoute.txt"
+        file_path_RouteDelay = "./output/" + name + "NSRouteDelay.txt"
+    elif routeType == 'GSP':
+        file_path_Route = "./output/" + name + "GSPRoute.txt"
+        file_path_RouteDelay = "./output/" + name + "GSPRouteDelay.txt"
+
     if not os.path.exists("./output/"):
         os.makedirs("./output/")
-    file_OGDRoute = open("./output/OGDRoute.txt", 'w+')
-    file_OGDRouteDelay = open("./output/OGDRouteDelay.txt", 'w+')
+
+    if name == 'test_kuiper':
+        constellation_type = 'kuiper'
+    elif name == 'test_starlink':
+        constellation_type = 'satrlink'
+    elif name == 'test_telesat':
+        constellation_type = 'telesat'
+
+    # file_OGDRoute = open(file_path_OGDRoute, 'w+')
+    # file_OGDRouteDelay = open(file_path_OGDRouteDelay, 'w+')
+
+    # file_NSRoute = open(file_path_NS, 'w+')
+    # file_NSRouteDelay = open(file_path_NSDelay, 'w+')
+
+    file_Route = open(file_path_Route, 'w+')
+    file_RouteDelay = open(file_path_RouteDelay, 'w+')
 
     # total_iterations = (simulation_end_time_s / time_step_ms)
     for time_since_epoch_ms in range(0, simulation_end_time_s * 1000, time_step_ms):
@@ -1287,32 +1806,84 @@ def mainTest():
             for gs in ground_station_satellites_in_range:
                 print(gs)
 
+        if enable_verbose_logs and routeType == 'GSP':
 
-        routing = []
-
-        if enable_verbose_logs:
-            print('\nOGDRoute', routing)
             temp = OGDRoutingTest(satellites, ground_station_satellites_in_range, graphs_sat_net_all_node)
-            routing = [1584] + temp + [1585]
-
+            routing = [number_of_sat] + temp + [number_of_sat+1]
+            # minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_all_node, source=1584, target=1585)
             delay = sum(graphs_sat_net_all_node[routing[i]][routing[i + 1]]['weight'] for i in range(len(routing) - 1))
 
             print(routing)
 
             for node in routing:
-                file_OGDRoute.write(str(node) + ',')
-            file_OGDRoute.write('\n')
+                file_Route.write(str(node) + ',')
+            file_Route.write('\n')
 
-            file_OGDRouteDelay.write(str(time_since_epoch_ms))
-            file_OGDRouteDelay.write(",")
-            file_OGDRouteDelay.write(str(delay))
-            file_OGDRouteDelay.write('\n')
+            file_RouteDelay.write(str(time_since_epoch_ms))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(delay))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(len(routing)-1))
+            file_RouteDelay.write('\n')
+
+        if enable_verbose_logs and routeType == 'OGD':
+            print('\nOGDRoute')
+
+            temp = OGDRoutingTest2(satellites, ground_station_satellites_in_range, graphs_sat_net_all_node, constellation_type)
+            routing = [number_of_sat] + temp + [number_of_sat+1]
+            # minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_all_node, source=1584, target=1585)
+            delay = sum(graphs_sat_net_all_node[routing[i]][routing[i + 1]]['weight'] for i in range(len(routing) - 1))
+
+            print(routing)
+
+            for node in routing:
+                file_Route.write(str(node) + ',')
+            file_Route.write('\n')
+
+            file_RouteDelay.write(str(time_since_epoch_ms))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(delay))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(len(routing)-1))
+            file_RouteDelay.write('\n')
+
+        if enable_verbose_logs and routeType == 'GSP':
+
+            minWPath_vs_vt = nx.dijkstra_path(graphs_sat_net_all_node, source=number_of_sat, target=number_of_sat+1)
+            delay = sum(graphs_sat_net_all_node[minWPath_vs_vt[i]][minWPath_vs_vt[i + 1]]['weight'] for i in range(len(minWPath_vs_vt) - 1))
+
+            print(minWPath_vs_vt)
+
+            for node in minWPath_vs_vt:
+                file_Route.write(str(node) + ',')
+            file_Route.write('\n')
+
+            file_RouteDelay.write(str(time_since_epoch_ms))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(delay))
+            file_RouteDelay.write(",")
+            file_RouteDelay.write(str(len(minWPath_vs_vt)-1))
+            file_RouteDelay.write('\n')
 
     # verifiy_routing(isl_list, routing[0][1], routing[0][-2], sat_info, routing[0][1:-1])
-    file_OGDRoute.close()
-    file_OGDRouteDelay.close()
+    file_Route.close()
+    file_RouteDelay.close()
 
 
 
 if __name__ == "__main__":
-    mainTest()
+    # mainTest('NS', "test_starlink")
+    # mainTest('GSP', 'test_starlink')
+    # mainTest('OGD', "test_starlink")
+
+    # mainTest('NS', "test_kuiper")
+    # mainTest('GSP', 'test_kuiper')
+    # mainTest('OGD', "test_kuiper")
+
+    # mainTest('NS', "test_telesat")
+    # mainTest('GSP', 'test_telesat')
+    # mainTest('OGD', "test_telesat")
+
+    # main()
+    maintestFailure()
+

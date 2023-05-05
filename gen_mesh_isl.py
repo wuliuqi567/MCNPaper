@@ -224,9 +224,9 @@ def gs_selected(gen_data:str):
                  }
     return mesh_info
 
-def verifiy_routing(isl_list, sat_src, sat_des, sats_info, routing):
 
-    satellites = sats_info['satellites']
+def verifiy_routing(isl_list, sat_src, sat_des, satellites, routing):
+
     net_info = get_mesh_net(sat_src, sat_des)
 
     # add isl according to isl.txt
