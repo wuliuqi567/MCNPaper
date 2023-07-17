@@ -4,5 +4,5 @@ Elevation_angle=25
 NUM_ORBS=72
 NUM_SATS_PER_ORB=22
 INCLINATION_DEGREE=53
-simulation_end_time_s=86400
+simulation_end_time_s=10
 Time_step_s=5

@@ -1,5 +1,5 @@
 import sys
-sys.path.append("./satgenpy")
+sys.path.append("../satgenpy")
 import satgen
 import os
 import networkx as nx
