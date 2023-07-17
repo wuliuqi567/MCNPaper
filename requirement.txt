@@ -1,0 +1,9 @@
+astropy
+networkx
+loguru
+ephem
+sgp4
+geopy
+matplotlib
+statsmodels
+cartopy
