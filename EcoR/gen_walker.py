@@ -66,14 +66,15 @@ isl_file = os.path.join(gen_data, "isls.txt")
 distance_file_all = os.path.join(gen_data, "distance")
 if os.path.exists(distance_file_all):
     shutil.rmtree(distance_file_all)
-    os.mkdir(distance_file_all)
+os.mkdir(distance_file_all)
 
 access_sat_file_all = os.path.join(gen_data, "access_sat")
 
 print(access_sat_file_all)
-if not os.path.exists(access_sat_file_all):
-    # shutil.rmtree(access_sat_file_all)
-    os.mkdir(access_sat_file_all)
+if os.path.exists(access_sat_file_all):
+    shutil.rmtree(access_sat_file_all)
+    # os.mkdir(access_sat_file_all)
+os.mkdir(access_sat_file_all)
 
 sat_info = satgen.read_tles(tle_file)
 satellites = sat_info['satellites']
@@ -87,16 +88,29 @@ satgen.extend_ground_stations(
     "input_data/wlh.txt",
     gen_data + "/extended_ground_stations.txt")
 
-ground_stations = satgen.read_ground_stations_extended("dsj_starlink/extended_ground_stations.txt")
+ground_stations = satgen.read_ground_stations_extended(gen_data + "/extended_ground_stations.txt")
 for each_step in range(0, simulation_end_time_s, Time_step_s):
     each_time_current = epoch + each_step * u.second
-    distance_file = os.path.join(distance_file_all, "distance_{}.txt".format(each_step))
-    with open(distance_file, 'w') as f:
-        for (a, b) in isl_list:
-            sat_distance_m = satgen.distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(each_time_current))
-            f.write(str(sat_distance_m))
-            f.write('\n')
 
+    # write all sats distance to distance_.txt
+    distance_file = os.path.join(distance_file_all, "distance_{}.txt".format(each_step))
+    # with open(distance_file, 'w') as f:
+    #     for (a, b) in isl_list:
+    #         sat_distance_m = satgen.distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(each_time_current))
+    #         f.write(str(sat_distance_m))
+    #         f.write('\n')
+    with open(distance_file, 'w') as f:
+        for i in range(72*22):
+            for j in range(72*22):
+                if i == j:
+                    sat_distance_m = 0
+                else:
+                    sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[j], str(epoch),
+                                                                          str(each_time_current))
+                f.write(str(sat_distance_m))
+                f.write(',')
+            f.write('\n')
+    # write access sat to ground
     access_sat_file = os.path.join(access_sat_file_all, "access_sat_{}.txt".format(each_step))
     with open(access_sat_file, 'w') as f:
         for ground_station in ground_stations:
