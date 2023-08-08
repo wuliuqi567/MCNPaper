@@ -35,9 +35,10 @@ SATELLITE_CONE_RADIUS_M = ALTITUDE_M / math.tan(math.radians(Elevation_angle))
 
 MAX_GSL_LENGTH_M = math.sqrt(math.pow(SATELLITE_CONE_RADIUS_M, 2) + math.pow(ALTITUDE_M, 2))
 
-if not os.path.exists(gen_data):
-    os.makedirs(gen_data)
-
+if os.path.exists(gen_data):
+    shutil.rmtree(gen_data)
+os.mkdir(gen_data)
+# gen tle data
 satgen.generate_tles_from_scratch_manual(
             gen_data + "/tles.txt",
             gen_data,
@@ -52,7 +53,6 @@ satgen.generate_tles_from_scratch_manual(
 
         # ISLs
 print("Generating ISLs...")
-
 satgen.generate_plus_grid_isls(
     gen_data + "/isls.txt",
     NUM_ORBS,
@@ -61,8 +61,11 @@ satgen.generate_plus_grid_isls(
     idx_offset=0
 )
 
-tle_file = os.path.join(gen_data, "tles.txt")
-isl_file = os.path.join(gen_data, "isls.txt")
+isl_file_all = os.path.join(gen_data, "isls")
+if os.path.exists(isl_file_all):
+    shutil.rmtree(isl_file_all)
+os.mkdir(isl_file_all)
+
 distance_file_all = os.path.join(gen_data, "distance")
 if os.path.exists(distance_file_all):
     shutil.rmtree(distance_file_all)
@@ -70,17 +73,15 @@ os.mkdir(distance_file_all)
 
 access_sat_file_all = os.path.join(gen_data, "access_sat")
 
-print(access_sat_file_all)
 if os.path.exists(access_sat_file_all):
     shutil.rmtree(access_sat_file_all)
     # os.mkdir(access_sat_file_all)
 os.mkdir(access_sat_file_all)
 
-sat_info = satgen.read_tles(tle_file)
+sat_info = satgen.read_tles(os.path.join(gen_data, "tles.txt"))
 satellites = sat_info['satellites']
 epoch = sat_info['epoch']
-
-isl_list = satgen.read_isls(isl_file, len(satellites))
+isl_list = satgen.read_isls(os.path.join(gen_data, "isls.txt"), len(satellites))
 
 ground_station_satellites_in_range = []
 
@@ -88,28 +89,82 @@ satgen.extend_ground_stations(
     "input_data/wlh.txt",
     gen_data + "/extended_ground_stations.txt")
 
+print('start calculating ')
 ground_stations = satgen.read_ground_stations_extended(gen_data + "/extended_ground_stations.txt")
 for each_step in range(0, simulation_end_time_s, Time_step_s):
     each_time_current = epoch + each_step * u.second
 
     # write all sats distance to distance_.txt
     distance_file = os.path.join(distance_file_all, "distance_{}.txt".format(each_step))
+    eachtime_isls_file = os.path.join(isl_file_all, "isls_{}.txt".format(each_step))
+
     # with open(distance_file, 'w') as f:
     #     for (a, b) in isl_list:
     #         sat_distance_m = satgen.distance_m_between_satellites(satellites[a], satellites[b], str(epoch), str(each_time_current))
     #         f.write(str(sat_distance_m))
     #         f.write('\n')
-    with open(distance_file, 'w') as f:
-        for i in range(72*22):
-            for j in range(72*22):
-                if i == j:
-                    sat_distance_m = 0
-                else:
-                    sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[j], str(epoch),
-                                                                          str(each_time_current))
-                f.write(str(sat_distance_m))
-                f.write(',')
+
+    # calculate the shortest distance left and right sats
+    for i in range(len(satellites)):
+        # 当前卫星所属的轨道编号，和轨道内编号
+        num_of_plane = i//NUM_SATS_PER_ORB
+        num_of_in_plane = i % NUM_SATS_PER_ORB
+
+        # 左边轨道相连接的最短距离的卫星 计算一圈
+        left_plane = num_of_plane-1 if num_of_plane >= 1 else NUM_ORBS-1
+        right_plane = (num_of_plane+1) % NUM_ORBS
+        num_of_left_sat = left_plane * NUM_SATS_PER_ORB + num_of_in_plane
+        num_of_right_sat = right_plane * NUM_SATS_PER_ORB + num_of_in_plane
+        min_dist_left = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_left_sat], str(epoch), str(each_time_current))
+        min_dist_right = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_right_sat], str(epoch), str(each_time_current))
+
+        for sat_of_left in range(left_plane * NUM_SATS_PER_ORB, left_plane * NUM_SATS_PER_ORB + NUM_SATS_PER_ORB):
+            sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[sat_of_left], str(epoch), str(each_time_current))
+            if sat_distance_m < min_dist_left:
+                min_dist_left = sat_distance_m
+                num_of_left_sat = sat_of_left
+        for sat_of_right in range(right_plane * NUM_SATS_PER_ORB, right_plane * NUM_SATS_PER_ORB + NUM_SATS_PER_ORB):
+            sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[sat_of_right], str(epoch), str(each_time_current))
+            if sat_distance_m < min_dist_right:
+                min_dist_right = sat_distance_m
+                num_of_right_sat = sat_of_right
+
+        # 写isl连接关系到文件中 isls_xxx.txt 当前卫星的上下左右
+        num_of_up_sat = num_of_plane * NUM_SATS_PER_ORB + num_of_in_plane-1 if num_of_in_plane >= 1 else NUM_SATS_PER_ORB-1
+        num_of_down_sat = num_of_plane * NUM_SATS_PER_ORB + ((num_of_in_plane+1) % NUM_SATS_PER_ORB)
+        with open(eachtime_isls_file, 'a') as f:
+            f.write('{} {}'.format(i, num_of_up_sat))
             f.write('\n')
+            f.write('{} {}'.format(i, num_of_down_sat))
+            f.write('\n')
+            f.write('{} {}'.format(i, num_of_left_sat))
+            f.write('\n')
+            f.write('{} {}'.format(i, num_of_right_sat))
+            f.write('\n')
+        # 写距离到文件 distance_{}.txt
+        with open(distance_file, 'a') as f:
+            f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_up_sat], str(epoch), str(each_time_current))))
+            f.write('\n')
+            f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_down_sat], str(epoch), str(each_time_current))))
+            f.write('\n')
+            f.write(str(min_dist_left))
+            f.write('\n')
+            f.write(str(min_dist_right))
+            f.write('\n')
+
+    # 计算所有卫星的距离并保存到文件中
+    # with open(distance_file, 'w') as f:
+    #     for i in range(72*22):
+    #         for j in range(72*22):
+    #             if i == j:
+    #                 sat_distance_m = 0
+    #             else:
+    #                 sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[j], str(epoch),
+    #                                                                       str(each_time_current))
+    #             f.write(str(sat_distance_m))
+    #             f.write(',')
+    #         f.write('\n')
+
     # write access sat to ground
     access_sat_file = os.path.join(access_sat_file_all, "access_sat_{}.txt".format(each_step))
     with open(access_sat_file, 'w') as f:
