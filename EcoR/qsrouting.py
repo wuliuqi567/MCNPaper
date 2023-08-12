@@ -10,7 +10,7 @@ import openpyxl
 
 
 
-directory = './Globalstar'
+directory = './iridium'
 # 打开 Excel 文件
 workbook = openpyxl.load_workbook('access.xlsx')  # 替换为你的文件路径
 
@@ -44,150 +44,119 @@ for file in file_list:
             plr = float(line[4])
             walker_star_network.add_edge(src_node, des_node, weight=delay, band=band, plr=plr)
 
-    conn = list(sheet_Globalstar.iter_rows())[row_idx]
+    conn = list(sheet_iridium.iter_rows())[row_idx]
     row_idx += 1
-    service_1 = {'src': conn[0].value, 'dest': conn[1].value, 'bandwidth': 100/8, 'delay': 0.5, 'loss_rate': 0.3}
-    service_2 = {'src': conn[2].value, 'dest': conn[3].value, 'bandwidth': 700/8, 'delay': 0.7, 'loss_rate': 0.2}
-    service_3 = {'src': conn[4].value, 'dest': conn[5].value, 'bandwidth': 400/8, 'delay': 0.15, 'loss_rate': 0.15}
+    for i in range(3):
+        service_1 = {'src': conn[0 + 2 * i].value, 'dest': conn[1 + 2 * i].value, 'bandwidth': 100/8, 'delay': 0.5, 'loss_rate': 0.3}
+        service_2 = {'src': conn[0 + 2 * i].value, 'dest': conn[1 + 2 * i].value, 'bandwidth': 700/8, 'delay': 0.7, 'loss_rate': 0.2}
+        service_3 = {'src': conn[0 + 2 * i].value, 'dest': conn[1 + 2 * i].value, 'bandwidth': 400/8, 'delay': 0.15, 'loss_rate': 0.15}
 
-    s1_shortestLenghtPath = nx.dijkstra_path(walker_star_network, service_1['src'], service_1['dest'])
-    s2_shortestLenghtPath = nx.dijkstra_path(walker_star_network, service_2['src'], service_2['dest'])
-    s3_shortestLenghtPath = nx.dijkstra_path(walker_star_network, service_3['src'], service_3['dest'])
-    # print("shortest")
-    # print(s1_shortestLenghtPath)
-    # print(s2_shortestLenghtPath)
-    # print(s3_shortestLenghtPath)
-# shortestLenght = nx.shortest_path_length(walker_network, service_1['src'], service_1['dest'])
-# print(shortestLenghtPath, shortestLenght)
+        shortestLenghtPath = nx.dijkstra_path(walker_star_network, service_1['src'], service_1['dest'])
+        minLengthPath = len(shortestLenghtPath) - 1
 
-    s1_minLengthPath = len(s1_shortestLenghtPath) - 1
-    s1_maxLengthPath = len(s1_shortestLenghtPath) + 1
+        # 而cutoff参数设置的截断长度不包括源结点。
+        paths = nx.all_simple_paths(walker_star_network, service_1['src'], service_1['dest'], cutoff=minLengthPath)
+        paths = list(paths)
 
-    s2_minLengthPath = len(s2_shortestLenghtPath) - 1
-    s2_maxLengthPath = len(s2_shortestLenghtPath) + 1
+        max_u1 = -1000
+        max_u2 = -1000
+        max_u3 = -1000
+        path_max_u1 = []
+        path_max_u2 = []
+        path_max_u3 = []
 
-    s3_minLengthPath = len(s3_shortestLenghtPath) - 1
-    s3_maxLengthPath = len(s3_shortestLenghtPath) + 1
+        def osr(walker_star_network, one_path, rank):
+            # print(one_path)
+            path_list = []
+            for i in range(len(one_path) - 1):
+                path_list.append(sorted([one_path[i], one_path[i + 1]]))
 
+            delay = []
+            band = []
+            plr = []
+            all_delay = nx.get_edge_attributes(walker_star_network, "weight")
+            all_band = nx.get_edge_attributes(walker_star_network, "band")
+            all_plr = nx.get_edge_attributes(walker_star_network, "plr")
 
-    # 而cutoff参数设置的截断长度不包括源结点。
-    s1_paths = nx.all_simple_paths(walker_star_network, service_1['src'], service_1['dest'], cutoff=s1_minLengthPath)
-    s1_paths = list(s1_paths)
-    s2_paths = nx.all_simple_paths(walker_star_network, service_2['src'], service_2['dest'], cutoff=s2_minLengthPath)
-    s2_paths = list(s2_paths)
-    s3_paths = nx.all_simple_paths(walker_star_network, service_3['src'], service_3['dest'], cutoff=s3_minLengthPath)
-    s3_paths = list(s3_paths)
+            for i in range(len(path_list)):
+                # aa = all_delay.get(tuple(path_list[i]))
+                if all_delay.get(tuple(path_list[i])):
+                    delay.append(all_delay[tuple(path_list[i])])
+                    band.append(all_band[tuple(path_list[i])])
+                    plr.append(all_plr[tuple(path_list[i])])
+                else:
+                    # print('hh')
+                    link = path_list[i]
+                    link.reverse()
+                    delay.append(all_delay[tuple(link)])
+                    band.append(all_band[tuple(link)])
+                    plr.append(all_plr[tuple(link)])
 
-    max_u1 = -1000
-    max_u2 = -1000
-    max_u3 = -1000
-    path_max_u1 = []
-    path_max_u2 = []
-    path_max_u3 = []
-    # print(paths)
+            # normal
+            min_d = min(delay)
+            min_b = min(band)
+            min_p = min(plr)
 
-    def osr(walker_star_network, one_path, rank):
-        # print(one_path)
-        path_list = []
-        for i in range(len(one_path) - 1):
-            path_list.append(sorted([one_path[i], one_path[i + 1]]))
+            max_d = max(delay)
+            max_b = max(band)
+            max_p = max(plr)
 
-        delay = []
-        band = []
-        plr = []
-        all_delay = nx.get_edge_attributes(walker_star_network, "weight")
-        all_band = nx.get_edge_attributes(walker_star_network, "band")
-        all_plr = nx.get_edge_attributes(walker_star_network, "plr")
+            qd = round(max(delay) / sum(delay), 6)
+            qb = round(min(band) / sum(band), 6)
+            qp = round(max(plr) / sum(plr), 6)
 
-        for i in range(len(path_list)):
-            # aa = all_delay.get(tuple(path_list[i]))
-            if all_delay.get(tuple(path_list[i])):
-                delay.append(all_delay[tuple(path_list[i])])
-                band.append(all_band[tuple(path_list[i])])
-                plr.append(all_plr[tuple(path_list[i])])
-            else:
-                # print('hh')
-                link = path_list[i]
-                link.reverse()
-                delay.append(all_delay[tuple(link)])
-                band.append(all_band[tuple(link)])
-                plr.append(all_plr[tuple(link)])
+            # print(str(delay))
+            # print(max_d, min_d)
+            for i in range(len(delay)):
+                if max_d != min_d:
+                    delay[i] = round((delay[i] - min_d) / (max_d - min_d), 6)
+                else:
+                    delay[i] = 0.5
+                if max_b != min_b:
+                    band[i] = round((band[i] - min_b) / (max_b - min_b), 6)
+                else:
+                    band[i] = 0.5
+                # print(max_p, min_p)
+                if max_p != min_p:
+                    plr[i] = round((plr[i] - min_p) / (max_p - min_p), 6)
+                else:
+                    plr[i] = 0.5
 
-        # normal
-        min_d = min(delay)
-        min_b = min(band)
-        min_p = min(plr)
+            # min_b = min(band)
+            # max_d = max(delay)
+            # max_p = max(plr)
 
-        max_d = max(delay)
-        max_b = max(band)
-        max_p = max(plr)
+            u = service_weight[rank][0] * qb * sum(band) - service_weight[rank][1] * qd * sum(delay) - \
+                service_weight[rank][
+                    2] * qp * sum(plr)
+            return u
 
-        qd = round(max(delay) / sum(delay), 6)
-        qb = round(min(band) / sum(band), 6)
-        qp = round(max(plr) / sum(plr), 6)
+        for path in list(paths):
+            u1 = osr(walker_star_network, path, 0)
 
-        # print(str(delay))
-        # print(max_d, min_d)
-        for i in range(len(delay)):
-            if max_d != min_d:
-                delay[i] = round((delay[i] - min_d) / (max_d - min_d), 6)
-            else:
-                delay[i] = 0.5
-            if max_b != min_b:
-                band[i] = round((band[i] - min_b) / (max_b - min_b), 6)
-            else:
-                band[i] = 0.5
-            # print(max_p, min_p)
-            if max_p != min_p:
-                plr[i] = round((plr[i] - min_p) / (max_p - min_p), 6)
-            else:
-                plr[i] = 0.5
+            if u1 > max_u1:
+                max_u1 = u1
+                path_max_u1 = path
 
-        # min_b = min(band)
-        # max_d = max(delay)
-        # max_p = max(plr)
+            u2 = osr(walker_star_network, path, 1)
 
-        u = service_weight[rank][0] * qb * sum(band) - service_weight[rank][1] * qd * sum(delay) - service_weight[rank][
-            2] * qp * sum(plr)
-        return u
+            if u2 > max_u2:
+                max_u2 = u2
+                path_max_u2 = path
 
-    for path in list(s1_paths):
-        # print(path)
+            u3 = osr(walker_star_network, path, 2)
 
-        # print('one', one_path)
-        u1 = osr(walker_star_network, path, 0)
-        # print(u)
-        if u1 > max_u1:
-            max_u1 = u1
-            path_max_u1 = path
+            if u3 > max_u3:
+                max_u3 = u3
+                path_max_u3 = path
 
-    for path in list(s2_paths):
-        # print(path)
-
-        # print('one', one_path)
-        u2 = osr(walker_star_network, path, 1)
-        # print(u)
-        if u2 > max_u2:
-            max_u2 = u2
-            path_max_u2 = path
-
-    for path in list(s3_paths):
-        # print(path)
-
-        # print('one', one_path)
-        u3 = osr(walker_star_network, path, 2)
-        # print(u)
-        if u3 > max_u3:
-            max_u3 = u3
-            path_max_u3 = path
-
-    with open(os.path.join(directory, 'path.txt'), 'a') as f:
-        f.write(str(path_max_u1))
-        f.write('\n')
-        f.write(str(path_max_u2))
-        f.write('\n')
-        f.write(str(path_max_u3))
-        f.write('\n')
+        with open(os.path.join(directory, 'path.txt'), 'a') as f:
+            f.write(str(path_max_u1))
+            f.write('\n')
+            f.write(str(path_max_u2))
+            f.write('\n')
+            f.write(str(path_max_u3))
+            f.write('\n')
 
 
 
