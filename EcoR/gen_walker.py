@@ -8,7 +8,7 @@ import math
 import shutil
 from loguru import logger
 import random
-
+from collections import defaultdict
 
 # read configure file
 configure_dict = {}
@@ -109,45 +109,50 @@ for each_step in range(0, simulation_end_time_s, Time_step_s):
     #         f.write('\n')
 
     # calculate the shortest distance left and right sats
+
     isls_list = []
+    isls_dict = {key: 2 for key in range(NUM_SATS_PER_ORB * NUM_ORBS)}
+
     for i in range(len(satellites)):
         # 当前卫星所属的轨道编号，和轨道内编号
         num_of_plane = i//NUM_SATS_PER_ORB
         num_of_in_plane = i % NUM_SATS_PER_ORB
 
         # 左边轨道相连接的最短距离的卫星 计算一圈
-        left_plane = num_of_plane-1 if num_of_plane >= 1 else NUM_ORBS-1
+        # left_plane = num_of_plane-1 if num_of_plane >= 1 else NUM_ORBS-1
         right_plane = (num_of_plane+1) % NUM_ORBS
-        num_of_left_sat = left_plane * NUM_SATS_PER_ORB + num_of_in_plane
+        # num_of_left_sat = left_plane * NUM_SATS_PER_ORB + num_of_in_plane
         num_of_right_sat = right_plane * NUM_SATS_PER_ORB + num_of_in_plane
-        min_dist_left = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_left_sat], str(epoch), str(each_time_current))
-        min_dist_right = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_right_sat], str(epoch), str(each_time_current))
+        # min_dist_left = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_left_sat], str(epoch), str(each_time_current))
+        # min_dist_right = satgen.distance_m_between_satellites(satellites[i], satellites[num_of_right_sat], str(epoch), str(each_time_current))
 
-        for sat_of_left in range(left_plane * NUM_SATS_PER_ORB, left_plane * NUM_SATS_PER_ORB + NUM_SATS_PER_ORB):
-            sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[sat_of_left], str(epoch), str(each_time_current))
-            if sat_distance_m < min_dist_left:
-                min_dist_left = sat_distance_m
-                num_of_left_sat = sat_of_left
+        # for sat_of_left in range(left_plane * NUM_SATS_PER_ORB, left_plane * NUM_SATS_PER_ORB + NUM_SATS_PER_ORB):
+        #     sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[sat_of_left], str(epoch), str(each_time_current))
+        #     if sat_distance_m < min_dist_left:
+        #         min_dist_left = sat_distance_m
+        #         num_of_left_sat = sat_of_left
+
+        right_list = []
         for sat_of_right in range(right_plane * NUM_SATS_PER_ORB, right_plane * NUM_SATS_PER_ORB + NUM_SATS_PER_ORB):
             sat_distance_m = satgen.distance_m_between_satellites(satellites[i], satellites[sat_of_right], str(epoch), str(each_time_current))
-            if sat_distance_m < min_dist_right:
-                min_dist_right = sat_distance_m
-                num_of_right_sat = sat_of_right
+            right_list.append((sat_distance_m, sat_of_right))
+            # if sat_distance_m < min_dist_right:
+            #     min_dist_right = sat_distance_m
+            #     num_of_right_sat = sat_of_right
+        right_list = sorted(right_list, key=lambda x: x[0])
+        right_sat_ret = None
+        for x in right_list:
+            if isls_dict[x[1]] > 0:
+                isls_dict[x[1]] -= 1
+                right_sat_ret = x
+                break
+        # assert right_sat_ret == None
 
         # 写isl连接关系到文件中 isls_xxx.txt 当前卫星的上下左右
-        num_of_up_sat = num_of_plane * NUM_SATS_PER_ORB + num_of_in_plane-1 if num_of_in_plane >= 1 else NUM_SATS_PER_ORB-1
+        # num_of_up_sat = num_of_plane * NUM_SATS_PER_ORB + num_of_in_plane-1 if num_of_in_plane >= 1 else NUM_SATS_PER_ORB-1
         num_of_down_sat = num_of_plane * NUM_SATS_PER_ORB + ((num_of_in_plane+1) % NUM_SATS_PER_ORB)
 
         with open(eachtime_isls_file, 'a') as f:
-            if (i, num_of_up_sat) not in isls_list and (num_of_up_sat, i) not in isls_list:
-                isls_list.append((i, num_of_up_sat))
-                bd = round(random.uniform(100, 110), 6)
-                delay = round(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_up_sat], str(epoch),
-                                                                   str(each_time_current)) / 3e8, 6)
-                plr = round(random.uniform(0.005, 0.015), 6)
-                f.write('{} {} {} {} {}'.format(i, num_of_up_sat, bd, delay, plr))
-                f.write('\n')
-
             if (i, num_of_down_sat) not in isls_list and (num_of_down_sat, i) not in isls_list:
                 isls_list.append((i, num_of_down_sat))
                 bd = round(random.uniform(100, 110), 6)
@@ -155,35 +160,28 @@ for each_step in range(0, simulation_end_time_s, Time_step_s):
                                                                    str(each_time_current)) / 3e8, 6)
                 plr = round(random.uniform(0.005, 0.015), 6)
                 f.write('{} {} {} {} {}'.format(i, num_of_down_sat, bd, delay, plr))
-                f.write('\n')
-
-            if (i, num_of_left_sat) not in isls_list and (num_of_left_sat, i) not in isls_list:
-                isls_list.append((i, num_of_left_sat))
-                bd = round(random.uniform(100, 110), 6)
-                delay = round(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_left_sat], str(epoch),
-                                                                   str(each_time_current)) / 3e8, 6)
-                plr = round(random.uniform(0.005, 0.015), 6)
-                f.write('{} {} {} {} {}'.format(i, num_of_left_sat, bd, delay, plr))
+                # f.write('{} {}'.format(i, num_of_down_sat))
                 f.write('\n')
 
             if (i, num_of_right_sat) not in isls_list and (num_of_right_sat, i) not in isls_list:
                 isls_list.append((i, num_of_right_sat))
                 bd = round(random.uniform(100, 110), 6)
-                delay = round(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_right_sat], str(epoch),
-                                                                   str(each_time_current)) / 3e8, 6)
+                delay = right_sat_ret[0] / 3e6
                 plr = round(random.uniform(0.005, 0.015), 6)
+                # f.write('{} {}'.format(i, num_of_right_sat))
                 f.write('{} {} {} {} {}'.format(i, num_of_right_sat, bd, delay, plr))
                 f.write('\n')
+
         # 写距离到文件 distance_{}.txt
-        with open(distance_file, 'a') as f:
-            f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_up_sat], str(epoch), str(each_time_current))))
-            f.write('\n')
-            f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_down_sat], str(epoch), str(each_time_current))))
-            f.write('\n')
-            f.write(str(min_dist_left))
-            f.write('\n')
-            f.write(str(min_dist_right))
-            f.write('\n')
+        # with open(distance_file, 'a') as f:
+        #     f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_up_sat], str(epoch), str(each_time_current))))
+        #     f.write('\n')
+        #     f.write(str(satgen.distance_m_between_satellites(satellites[i], satellites[num_of_down_sat], str(epoch), str(each_time_current))))
+        #     f.write('\n')
+        #     f.write(str(min_dist_left))
+        #     f.write('\n')
+        #     f.write(str(min_dist_right))
+        #     f.write('\n')
     isls_list.clear()
     # 计算所有卫星的距离并保存到文件中
     # with open(distance_file, 'w') as f:
@@ -218,6 +216,15 @@ for each_step in range(0, simulation_end_time_s, Time_step_s):
             # logger.info(satellites_in_range)
             f.write(str(satellites_in_range))
             f.write('\n')
-
-
+    ret_dict = defaultdict(int)
+    with open(eachtime_isls_file, "r") as f:
+        lines = f.readlines()
+        lines = lines[1:]
+        for line in lines:
+            val = line.split()
+            ret_dict[val[0]] += 1
+            ret_dict[val[1]] += 1
+        for key, val in ret_dict.items():
+            if val != 4:
+                print(f'{key}: {val}')
 logger.info("finish")

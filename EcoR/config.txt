@@ -1,8 +1,8 @@
-satellite_network_dir_and_name=GLONASS
-ALTITUDE_M=1414000
+satellite_network_dir_and_name=iridium
+ALTITUDE_M=780000
 Elevation_angle=25
-NUM_ORBS=3
-NUM_SATS_PER_ORB=8
-INCLINATION_DEGREE=65
+NUM_ORBS=6
+NUM_SATS_PER_ORB=11
+INCLINATION_DEGREE=87
 simulation_end_time_s=1800
 Time_step_s=5
